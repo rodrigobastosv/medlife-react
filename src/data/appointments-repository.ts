@@ -43,6 +43,7 @@ export async function fetchPatientAppointments(
     .eq('owner_id', scope.ownerId)
     .eq('patient_id', patientId)
     .order('scheduled_date', { ascending: false })
+    .order('scheduled_time', { ascending: false, nullsFirst: false })
     .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar as consultas', error);
@@ -103,9 +104,37 @@ export async function fetchAgenda(
         `and(recall_date.gte.${from},recall_date.lte.${to})`,
     )
     .order('scheduled_date', { ascending: true })
+    // Within a day the running order is the clock. Legacy rows with no time
+    // sort first rather than vanishing to the bottom of the list.
+    .order('scheduled_time', { ascending: true, nullsFirst: true })
     .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar a agenda', error);
+  return data.map(toAppointment);
+}
+
+/**
+ * Everything scheduled for one day, in clock order — what the home screen shows
+ * as "hoje".
+ *
+ * A day is a range of one, so this could have gone through
+ * `fetchAppointmentsInRange`. It is separate because it wants the patient's name
+ * joined (the home screen lists who is coming) and that read deliberately does
+ * not — it feeds the report, which counts rows and would be paying for a join it
+ * never reads.
+ */
+export async function fetchAppointmentsOnDay(scope: Scope, day: Date): Promise<Appointment[]> {
+  const on = toDateColumn(day);
+
+  const { data, error } = await supabase
+    .from(Table.appointments)
+    .select(columnsWithPatient(scope))
+    .eq('owner_id', scope.ownerId)
+    .eq('scheduled_date', on)
+    .order('scheduled_time', { ascending: true, nullsFirst: true })
+    .overrideTypes<AppointmentRow[], { merge: false }>();
+
+  if (error !== null) throw new AppError('Não foi possível carregar as consultas de hoje', error);
   return data.map(toAppointment);
 }
 

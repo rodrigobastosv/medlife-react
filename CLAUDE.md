@@ -74,9 +74,17 @@ recorded" _or_ "you may not see it": decide what to render from the **role**,
 never from the null. Hiding the finance block in the form is UX; the policy is
 what protects it.
 
-**`appointments.scheduled_date` is a `date`, not a timestamp.** There is no time
-of day anywhere in the system. See `docs/aviso-de-consultas-do-dia.md` for what
-that rules out.
+**The database is shared with the Flutter app** (`../medlife`), which is alive
+and reads the same tables. A schema change here has to be safe _there_ too:
+`appointments.scheduled_date` stayed a `date` and gained a separate
+`scheduled_time` column precisely because converting it to `timestamptz` would
+have silently broken the Flutter app's `.lte('scheduled_date', to)` range
+queries. Prefer additive columns. Migrations that originate here live in
+`supabase/migrations/`; the older ones only exist in `../medlife`.
+
+**`scheduled_time` is nullable in the database but required by the form.** The
+null means "recorded before the column existed", not "allowed to be empty" —
+render the missing time as absent rather than as a placeholder.
 
 **Route guards are layout routes** (`app/routing/guards.tsx`) rendering
 `<Outlet />` or `<Navigate />`, not `if`s inside pages — so the rule is declared

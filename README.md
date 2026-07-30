@@ -104,12 +104,20 @@ from the **role**, never from the null.
 
 ## Backend
 
-Unchanged from the Flutter app, and shared with it. If the database has not been
-set up yet, run the migrations in `../medlife/supabase/migrations/` in order
-(`schema.sql`, `002_secretaries_and_roles.sql`,
-`003_fix_profile_relationships.sql`) and follow the Auth settings in that
-project's README — e-mail confirmation must stay **on**, and
-`http://localhost:3000/**` must be in the redirect allow-list.
+Shared with the Flutter app. If the database has not been set up yet, run the
+migrations in `../medlife/supabase/migrations/` in order (`schema.sql`,
+`002_secretaries_and_roles.sql`, `003_fix_profile_relationships.sql`) and follow
+the Auth settings in that project's README — e-mail confirmation must stay
+**on**, and `http://localhost:3000/**` must be in the redirect allow-list.
+
+Then run `supabase/migrations/004_appointment_scheduled_time.sql` **from this
+repository**. It is the first schema change that originated here rather than in
+the Flutter app, which is why there is now a `supabase/` directory on this side
+too; the earlier ones still live only in `../medlife`. It is additive — a
+`scheduled_time` column — precisely so the Flutter app keeps working untouched.
+Because the database is shared, **any change here has to be safe for that app
+as well**: converting `scheduled_date` to `timestamptz` would have silently
+broken its date-range queries, which is why it was not done.
 
 ## Stack, and why
 

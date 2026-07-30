@@ -38,6 +38,17 @@ export interface Appointment {
   readonly id: string;
   readonly patientId: string;
   readonly scheduledDate: Date;
+  /**
+   * `HH:mm`, or `null` on an appointment recorded before the column existed.
+   *
+   * Kept as a string rather than folded into `scheduledDate` because the
+   * database keeps them apart: `scheduled_date` is a `date` and this is a
+   * `time`. Combining them here would mean splitting them again on every write,
+   * and would quietly invent a time — midnight — for every legacy row that has
+   * none. The form requires it, so the null is a fact about the past, not a
+   * value anyone is still allowed to create.
+   */
+  readonly scheduledTime: string | null;
   readonly type: AppointmentType;
   readonly location: AppointmentLocation;
   readonly status: AppointmentStatus;
@@ -60,6 +71,8 @@ export interface AppointmentRow {
   id: string;
   patient_id: string;
   scheduled_date: string;
+  /** Postgres `time` arrives as `HH:mm:ss`; absent on rows written before it. */
+  scheduled_time?: string | null;
   type: string | null;
   location: string | null;
   status: string | null;
@@ -78,6 +91,7 @@ export function toAppointment(row: AppointmentRow): Appointment {
     id: row.id,
     patientId: row.patient_id,
     scheduledDate: fromDateColumn(row.scheduled_date),
+    scheduledTime: toTimeOfDay(row.scheduled_time),
     type: toAppointmentType(row.type),
     location: toAppointmentLocation(row.location),
     status: toAppointmentStatus(row.status),
@@ -95,6 +109,23 @@ export function toAppointment(row: AppointmentRow): Appointment {
     recallDate: row.recall_date === null ? null : fromDateColumn(row.recall_date),
     notes: row.notes,
   };
+}
+
+/**
+ * `HH:mm:ss` (or `HH:mm`) from Postgres, trimmed to the `HH:mm` the UI shows and
+ * `<input type="time">` expects.
+ *
+ * Anything that is not a time is treated as absent rather than passed through:
+ * a malformed value would reach the form's `value` attribute, where the browser
+ * silently discards it, and the field would look empty while the row still held
+ * the bad data.
+ */
+export function toTimeOfDay(wire: string | null | undefined): string | null {
+  if (wire === null || wire === undefined) return null;
+  const match = /^(\d{2}):(\d{2})/.exec(wire);
+  if (match === null) return null;
+  const [, hours, minutes] = match;
+  return Number(hours) > 23 || Number(minutes) > 59 ? null : `${hours}:${minutes}`;
 }
 
 /** Zero when there is no visible finance row. Convenience for summing. */
@@ -123,6 +154,8 @@ export function paymentLabel(finance: AppointmentFinance): string {
 export interface AppointmentDraft {
   patientId: string;
   scheduledDate: Date;
+  /** `HH:mm`. Required by the form, so a draft always carries one. */
+  scheduledTime: string;
   type: AppointmentType;
   location: AppointmentLocation;
   status: AppointmentStatus;
@@ -137,6 +170,7 @@ export function appointmentDraftToColumns(draft: AppointmentDraft) {
   return {
     patient_id: draft.patientId,
     scheduled_date: toDateColumn(draft.scheduledDate),
+    scheduled_time: draft.scheduledTime,
     type: draft.type,
     location: draft.location,
     status: draft.status,

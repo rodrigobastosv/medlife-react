@@ -6,6 +6,7 @@ import {
   createAppointment,
   deleteAppointment,
   fetchAgenda,
+  fetchAppointmentsOnDay,
   fetchPatientAppointments,
   fetchPendingRecalls,
   fetchUpcomingReturns,
@@ -31,6 +32,23 @@ export function usePendingRecallsQuery() {
     // the component body. Called during render it would be a new value on every
     // render — and if it were part of the key, every render would be a new query.
     queryFn: () => fetchPendingRecalls(scope, dateOnly(new Date())),
+  });
+}
+
+/**
+ * Today's appointments, for the home screen.
+ *
+ * The day is resolved once here and passed to both the key and the query, so the
+ * two cannot disagree — computing it separately in each would, at midnight,
+ * cache one day's rows under the next day's key.
+ */
+export function useTodayAppointmentsQuery() {
+  const scope = useDataScope();
+  const today = dateOnly(new Date());
+
+  return useQuery({
+    queryKey: queryKeys.appointments.onDay(scope.ownerId, today),
+    queryFn: () => fetchAppointmentsOnDay(scope, today),
   });
 }
 

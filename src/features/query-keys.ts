@@ -34,6 +34,11 @@ export const queryKeys = {
     forPatient: (ownerId: string, patientId: string) =>
       ['appointments', ownerId, 'patient', patientId] as const,
     recalls: (ownerId: string) => ['appointments', ownerId, 'recalls'] as const,
+    // The day is in the key so that crossing midnight with the app open is a
+    // different query rather than a stale one — the cache cannot know the date
+    // moved on its own.
+    onDay: (ownerId: string, day: Date) =>
+      ['appointments', ownerId, 'day', toDateColumn(day)] as const,
     returns: (ownerId: string) => ['appointments', ownerId, 'returns'] as const,
     // The month is part of the key: paging the agenda is a different query, not
     // a refetch of the same one — which is what lets the previous month stay

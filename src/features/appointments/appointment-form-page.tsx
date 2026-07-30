@@ -46,6 +46,9 @@ import { PageSpinner } from '@/design-system/components/spinner';
  */
 const schema = z.object({
   scheduledDate: z.string().min(1, 'Informe a data da consulta'),
+  // Required, and that is the point of the change: an appointment without a
+  // time is what stopped the app from being able to warn anyone about the day.
+  scheduledTime: z.string().min(1, 'Informe o horário da consulta'),
   type: z.enum(APPOINTMENT_TYPES),
   location: z.enum(APPOINTMENT_LOCATIONS),
   status: z.enum(APPOINTMENT_STATUSES),
@@ -187,6 +190,17 @@ function AppointmentFormView({
             error={errors.scheduledDate?.message}
             {...register('scheduledDate')}
           />
+          <TextField
+            label="Horário"
+            type="time"
+            error={errors.scheduledTime?.message}
+            hint={
+              appointment !== undefined && appointment.scheduledTime === null
+                ? 'Esta consulta foi registrada antes do horário existir. Informe um para salvar.'
+                : undefined
+            }
+            {...register('scheduledTime')}
+          />
           <SelectField
             label="Tipo"
             options={APPOINTMENT_TYPES.map((value) => ({
@@ -327,6 +341,11 @@ function toFormValues(
       // recorded in nearly every case. Arriving from the agenda overrides that
       // with the day the user was looking at.
       scheduledDate: toDateColumn(scheduledFor),
+      // Deliberately blank rather than a guess like "09:00". A pre-filled time
+      // is one the user can accept without reading, and a wrong time recorded
+      // confidently is worse than an empty field the form refuses to submit.
+      // The agenda supplies the day; only the clock is still missing.
+      scheduledTime: '',
       type: 'visit',
       location: 'other',
       // "Realizada" is right for the usual case — recording a visit that has
@@ -348,6 +367,7 @@ function toFormValues(
   const { finance } = appointment;
   return {
     scheduledDate: toDateColumn(appointment.scheduledDate),
+    scheduledTime: appointment.scheduledTime ?? '',
     type: appointment.type,
     location: appointment.location,
     status: appointment.status,
@@ -369,6 +389,7 @@ function toDraft(
   return {
     patientId: context.patientId,
     scheduledDate: fromDateColumn(values.scheduledDate),
+    scheduledTime: values.scheduledTime,
     type: values.type,
     location: values.location,
     status: values.status,
