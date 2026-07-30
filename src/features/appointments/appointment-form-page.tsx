@@ -1,14 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import { useSession } from '@/app/providers/session-context';
 import { useToast } from '@/app/providers/toast-context';
 import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
-import { fromDateColumn, toDateColumn } from '@/core/format';
+import { dateOnly, fromDateColumn, toDateColumn } from '@/core/format';
 import type { Appointment, AppointmentDraft } from '@/domain/appointments/appointment';
 import {
   APPOINTMENT_LOCATIONS,
@@ -62,6 +62,7 @@ type AppointmentForm = z.infer<typeof schema>;
 
 export function AppointmentFormPage() {
   const { patientId, appointmentId } = useParams();
+  const [searchParams] = useSearchParams();
   const patient = usePatientQuery(patientId ?? '');
 
   // Editing reads the appointment out of the patient's history, which the
@@ -91,18 +92,41 @@ export function AppointmentFormPage() {
       patientId={patientId}
       patientName={patient.data?.fullName ?? 'Paciente'}
       appointment={existing}
+      // Only meaningful when creating: an existing appointment carries its own
+      // date, and a `?on=` left in the URL must not overwrite it.
+      initialDate={existing === undefined ? parseDateParam(searchParams.get('on')) : undefined}
     />
   );
+}
+
+/**
+ * The `?on=yyyy-MM-dd` the agenda schedules with, or `undefined` if it is
+ * missing or not a real date.
+ *
+ * A query parameter is user-editable, so it is treated as untrusted input: the
+ * shape is checked before parsing, and `getTime()` catches the values that pass
+ * the regex but are not days — `2026-02-31` rolls over in `Date` rather than
+ * failing. Anything rejected falls through to the normal default of today,
+ * which is why nothing here reports an error: a broken link should still open a
+ * usable form.
+ */
+function parseDateParam(value: string | null): Date | undefined {
+  if (value === null || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = fromDateColumn(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return toDateColumn(date) === value ? date : undefined;
 }
 
 function AppointmentFormView({
   patientId,
   patientName,
   appointment,
+  initialDate,
 }: {
   patientId: string;
   patientName: string;
   appointment: Appointment | undefined;
+  initialDate: Date | undefined;
 }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -119,7 +143,7 @@ function AppointmentFormView({
     formState: { errors },
   } = useForm<AppointmentForm>({
     resolver: zodResolver(schema),
-    defaultValues: toFormValues(appointment),
+    defaultValues: toFormValues(appointment, initialDate),
   });
 
   // `useWatch` subscribes to a single field, so typing in it re-renders only
@@ -289,15 +313,28 @@ function AppointmentFormView({
   );
 }
 
-function toFormValues(appointment: Appointment | undefined): AppointmentForm {
+/** Strictly after today — today itself is a visit that may well have happened. */
+const isFutureDay = (date: Date): boolean => dateOnly(date) > dateOnly(new Date());
+
+function toFormValues(
+  appointment: Appointment | undefined,
+  initialDate: Date | undefined,
+): AppointmentForm {
   if (appointment === undefined) {
+    const scheduledFor = initialDate ?? new Date();
     return {
       // A new appointment defaults to today, because that is when it is being
-      // recorded in nearly every case.
-      scheduledDate: toDateColumn(new Date()),
+      // recorded in nearly every case. Arriving from the agenda overrides that
+      // with the day the user was looking at.
+      scheduledDate: toDateColumn(scheduledFor),
       type: 'visit',
       location: 'other',
-      status: 'completed',
+      // "Realizada" is right for the usual case — recording a visit that has
+      // already happened — but wrong for the one this form is now also used
+      // for. A consultation booked for a future day has not happened yet, and
+      // defaulting it to done would quietly file it into the reports as
+      // revenue that was never earned.
+      status: isFutureDay(scheduledFor) ? 'scheduled' : 'completed',
       nextReturnDate: '',
       recallDate: '',
       notes: '',

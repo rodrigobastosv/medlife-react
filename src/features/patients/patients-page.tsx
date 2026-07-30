@@ -13,6 +13,7 @@ import {
   type AgeBand,
 } from '@/domain/patients/patient-age-summary';
 import { patientOriginLabel } from '@/domain/patients/patient-origin';
+import { searchPatients } from '@/domain/patients/patient-search';
 import { PatientsOverview } from '@/features/patients/patients-overview';
 import { usePatientsQuery } from '@/features/patients/use-patients';
 import { buttonClasses } from '@/design-system/components/button-classes';
@@ -194,16 +195,12 @@ function noMatchMessage(search: string, band: AgeBand | undefined): string {
 }
 
 /**
- * Search over name, CPF and phone, narrowed to an age band.
+ * The text search, narrowed to an age band.
  *
  * The two are ANDed: the band comes from the chart above and the term from the
- * field, and a user who has both set is asking for the intersection.
- *
- * `normalize` strips accents (via Unicode decomposition, which splits "á" into
- * "a" + a combining mark that the regex then removes) so "Jose" finds "José" —
- * without it a search for an accented name only works if the user types the
- * accent, which nobody does. Digits are stripped from CPF and phone so "11987"
- * matches "(11) 98765-4321".
+ * field, and a user who has both set is asking for the intersection. Matching a
+ * term against a patient is `searchPatients` in the domain — the picker dialog
+ * on the agenda searches the same register, and one rule serves both.
  */
 function filterPatients(
   patients: readonly Patient[],
@@ -218,24 +215,5 @@ function filterPatients(
       ? patients
       : patients.filter((patient) => ageBandOfPatient(patient, now)?.label === bandLabel);
 
-  const term = normalize(search);
-  if (term === '') return [...byBand];
-
-  const digits = term.replace(/\D/g, '');
-
-  return byBand.filter((patient) => {
-    if (normalize(patient.fullName).includes(term)) return true;
-    if (digits === '') return false;
-    return (
-      (patient.cpf ?? '').replace(/\D/g, '').includes(digits) ||
-      (patient.phone ?? '').replace(/\D/g, '').includes(digits)
-    );
-  });
+  return searchPatients(byBand, search);
 }
-
-const normalize = (value: string): string =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');

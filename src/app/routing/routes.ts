@@ -1,3 +1,5 @@
+import { toDateColumn } from '@/core/format';
+
 /**
  * Every path in the app, in one place. Port of the `AppRoute` enum.
  *
@@ -18,7 +20,16 @@ export const routes = {
   newPatient: '/patients/new',
   patient: (patientId: string) => `/patients/${patientId}`,
   editPatient: (patientId: string) => `/patients/${patientId}/edit`,
-  newAppointment: (patientId: string) => `/patients/${patientId}/appointments/new`,
+  /**
+   * `on` pre-fills the form's date. It is a query parameter rather than a path
+   * segment because it is optional and not part of the resource's identity: the
+   * page addressed is "a new appointment for this patient" either way, and a
+   * stripped or malformed `?on=` still lands somewhere sensible.
+   */
+  newAppointment: (patientId: string, on?: Date) =>
+    on === undefined
+      ? `/patients/${patientId}/appointments/new`
+      : `/patients/${patientId}/appointments/new?on=${toDateColumn(on)}`,
   editAppointment: (patientId: string, appointmentId: string) =>
     `/patients/${patientId}/appointments/${appointmentId}/edit`,
   secretaries: '/secretaries',
