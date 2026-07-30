@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
-import { dateOnly, formatWeekday } from '@/core/format';
+import { dateOnly, formatDate, formatWeekday } from '@/core/format';
 import {
   agendaEventTypeLabel,
   dayKey,
@@ -11,10 +13,12 @@ import {
 } from '@/domain/agenda/agenda-event';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { useAgendaQuery } from '@/features/appointments/use-appointments';
+import { PatientPickerDialog } from '@/features/patients/patient-picker-dialog';
+import { Button } from '@/design-system/components/button';
 import { Calendar } from '@/design-system/components/calendar';
 import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
-import { CalendarIcon } from '@/design-system/components/icons';
+import { CalendarIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { SkeletonList } from '@/design-system/components/skeleton';
 import { Tag, type TagTone } from '@/design-system/components/tag';
@@ -34,7 +38,9 @@ export function AgendaPage() {
   // patient's id should.
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(() => dateOnly(new Date()));
+  const [isPickingPatient, setIsPickingPatient] = useState(false);
 
+  const navigate = useNavigate();
   const agenda = useAgendaQuery(month);
 
   // Regrouping on every render would rebuild the map for every hover; this ties
@@ -83,7 +89,15 @@ export function AgendaPage() {
         </Card>
 
         <section className="flex flex-col gap-3">
-          <h2 className="font-display text-lg font-semibold">{formatWeekday(selectedDay)}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold">{formatWeekday(selectedDay)}</h2>
+            {/* Scheduling starts from the day you are looking at, which is the
+                whole point of doing it here rather than from the patient's
+                record: the date is already chosen. */}
+            <Button size="sm" icon={<PlusIcon />} onClick={() => setIsPickingPatient(true)}>
+              Nova consulta
+            </Button>
+          </div>
 
           {agenda.isPending ? (
             <SkeletonList rows={2} />
@@ -98,7 +112,9 @@ export function AgendaPage() {
             <EmptyState
               icon={<CalendarIcon />}
               title="Nada neste dia"
-              message="Escolha outro dia no calendário — os dias com marcação têm um ponto colorido."
+              message="Escolha outro dia no calendário — os dias com marcação têm um ponto colorido — ou marque uma consulta para este."
+              actionLabel="Marcar consulta"
+              onAction={() => setIsPickingPatient(true)}
             />
           ) : (
             <ul className="flex flex-col gap-3">
@@ -116,6 +132,19 @@ export function AgendaPage() {
           )}
         </section>
       </div>
+
+      <PatientPickerDialog
+        open={isPickingPatient}
+        title="Nova consulta"
+        description={`Para quem é a consulta de ${formatDate(selectedDay)}?`}
+        onCancel={() => setIsPickingPatient(false)}
+        // The dialog only answers "who?"; the date it is being scheduled for is
+        // this page's state, and the two meet in the URL of the form.
+        onSelect={(patient) => {
+          setIsPickingPatient(false);
+          void navigate(routes.newAppointment(patient.id, selectedDay));
+        }}
+      />
     </Page>
   );
 }

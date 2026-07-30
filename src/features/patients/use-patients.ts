@@ -21,11 +21,18 @@ import { queryKeys } from '@/features/query-keys';
  * about loading patients is here, and nothing React-specific leaks below it.
  */
 
-export function usePatientsQuery() {
+/**
+ * `enabled` is here for callers that mount the hook before they need the data —
+ * the patient picker renders with its dialog closed, and a modal nobody has
+ * opened should not cost a request. It defaults to true, so the screens that
+ * simply show the list are unaffected.
+ */
+export function usePatientsQuery({ enabled = true }: { enabled?: boolean } = {}) {
   const { ownerId } = useDataScope();
   return useQuery({
     queryKey: queryKeys.patients.all(ownerId),
     queryFn: () => fetchPatients(ownerId),
+    enabled,
   });
 }
 
