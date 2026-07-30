@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import { cn } from '@/design-system/cn';
+import { ChevronRightIcon } from '@/design-system/components/icons';
 
 /**
  * The three form controls the app uses, each wrapped in the same label/error
@@ -124,6 +125,22 @@ export interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectEl
   containerClassName?: string;
 }
 
+/**
+ * The chevron is **ours**, not the browser's.
+ *
+ * The native one cannot be positioned: `padding-right` moves it in Firefox and
+ * is ignored by Chrome, which pins its arrow a fixed few pixels off the border
+ * box — which is the cramped look this replaces. Its colour is equally out of
+ * reach, so on the dark theme it stayed a system grey next to `on-surface`
+ * text.
+ *
+ * `appearance-none` removes the native control's chrome only; the popup, the
+ * keyboard behaviour and the form semantics are the browser's own and are
+ * untouched. The icon is `pointer-events-none` so clicking it still falls
+ * through and opens the select, and `pr-11` reserves the lane it sits in so a
+ * long option is clipped by the fade of the border rather than running under
+ * the arrow.
+ */
 export function SelectField({
   label,
   error,
@@ -137,20 +154,30 @@ export function SelectField({
   return (
     <FieldShell label={label} error={error} hint={hint} className={containerClassName}>
       {({ controlId, describedBy }) => (
-        <select
-          id={controlId}
-          aria-invalid={error !== undefined}
-          aria-describedby={describedBy}
-          className={cn(controlClasses(error !== undefined), 'h-[46px]', className)}
-          {...rest}
-        >
-          {placeholder !== undefined && <option value="">{placeholder}</option>}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id={controlId}
+            aria-invalid={error !== undefined}
+            aria-describedby={describedBy}
+            className={cn(
+              controlClasses(error !== undefined),
+              'h-[46px] appearance-none pr-11',
+              className,
+            )}
+            {...rest}
+          >
+            {placeholder !== undefined && <option value="">{placeholder}</option>}
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronRightIcon
+            className="text-on-surface-variant pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 rotate-90"
+            aria-hidden
+          />
+        </div>
       )}
     </FieldShell>
   );
