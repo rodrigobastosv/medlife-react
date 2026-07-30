@@ -8,7 +8,18 @@ import { cn } from '@/design-system/cn';
  */
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('bg-surface-container rounded-l p-4 sm:p-6', className)} {...rest}>
+    <div
+      className={cn(
+        // A hairline rather than a shadow. This palette has no elevation shadow
+        // token, and a border is the honest way to separate a surface from the
+        // page in both themes: on the dark theme a drop shadow has nothing
+        // lighter to fall against and simply disappears, which is why the
+        // single-level version read as flat there.
+        'bg-surface-container-low border-outline/70 rounded-l border p-4 sm:p-6',
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </div>
   );
@@ -32,8 +43,11 @@ export function CardButton({
     <button
       type="button"
       className={cn(
-        'bg-surface-container rounded-l p-4 text-left transition-colors sm:p-6',
-        'hover:bg-primary-container/60 cursor-pointer',
+        'bg-surface-container-low border-outline/70 rounded-l border p-4 text-left transition-colors sm:p-6',
+        // Hover steps up one surface level instead of jumping to the accent
+        // container. The old jump changed hue as well as lightness, which read
+        // as a selection rather than as a pointer being over something.
+        'hover:bg-surface-container-high cursor-pointer',
         className,
       )}
       {...rest}
