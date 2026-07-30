@@ -17,6 +17,18 @@ const currencyFormat = new Intl.NumberFormat('pt-BR', {
 
 export const formatCurrency = (value: number): string => currencyFormat.format(value);
 
+/**
+ * An age in years, for figures that are not whole — an average, or the median of
+ * an even number of patients ("46", "46,5").
+ *
+ * One decimal at most: a mean age carries no useful precision beyond that, and
+ * "46,3333333" reads as a bug. The comma comes from the pt-BR locale, which is
+ * exactly why this is not `value.toFixed(1)`.
+ */
+const ageFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+export const formatAge = (years: number): string => ageFormat.format(years);
+
 /** dd/MM/yyyy */
 export const formatDate = (date: Date): string => format(date, 'dd/MM/yyyy', { locale: ptBR });
 
