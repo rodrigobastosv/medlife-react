@@ -36,8 +36,15 @@ export function PageHeader({
       <div className="min-w-0">
         {back}
         {/* One <h1> per page. Screen-reader users navigate by heading, and a
-            page with none (or three) is a page they cannot skim. */}
-        <h1 className="font-display truncate text-2xl font-bold">{title}</h1>
+            page with none (or three) is a page they cannot skim.
+
+            `line-clamp-2` rather than `truncate`: a patient's full name is the
+            title of their record, and a single clipped line ("Maria Aparecida
+            dos S…") with no tooltip loses the part that tells two siblings
+            apart. Two lines fit almost every name; `title` covers the rest. */}
+        <h1 className="font-display line-clamp-2 text-3xl font-bold tracking-tight" title={title}>
+          {title}
+        </h1>
         {subtitle !== undefined && (
           <div className="text-on-surface-variant mt-1 text-sm">{subtitle}</div>
         )}

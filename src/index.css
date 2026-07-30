@@ -37,10 +37,18 @@
   --ml-secondary-container: #fbdcc7;
   --ml-on-secondary-container: #5c2a0f;
 
-  /* Surfaces */
+  /* Surfaces.
+
+     Three container levels, not one. M3 defines surfaceContainerLow/High
+     alongside the middle step; the first port took only the middle, which left
+     a tile inside a card inside a page rendering as three identical greys with
+     nothing to group them. The levels are what carry hierarchy here, because
+     this palette has no elevation shadow. */
   --ml-surface: #fafbfb;
   --ml-on-surface: #1b2223;
+  --ml-surface-container-low: #f2f4f4;
   --ml-surface-container: #eef1f1;
+  --ml-surface-container-high: #e5eaea;
   --ml-on-surface-variant: #5c6869;
   --ml-outline: #d3d6d6;
 
@@ -69,11 +77,16 @@
   --ml-secondary-container: #7a3a18;
   --ml-on-secondary-container: #fbdcc7;
 
+  /* The dark steps are spread wider than the light ones on purpose: the same
+     hex delta reads as a smaller difference on a dark background, which is why
+     the single-level version made tiles almost disappear against the page. */
   --ml-surface: #121a1b;
   --ml-on-surface: #e6eeef;
-  --ml-surface-container: #1d2627;
+  --ml-surface-container-low: #182122;
+  --ml-surface-container: #1f2a2b;
+  --ml-surface-container-high: #273334;
   --ml-on-surface-variant: #9daeaf;
-  --ml-outline: #394142;
+  --ml-outline: #3d4748;
 
   --ml-success: #2f8f7a;
   --ml-warning: #e8a317;
@@ -99,7 +112,9 @@
 
   --color-surface: var(--ml-surface);
   --color-on-surface: var(--ml-on-surface);
+  --color-surface-container-low: var(--ml-surface-container-low);
   --color-surface-container: var(--ml-surface-container);
+  --color-surface-container-high: var(--ml-surface-container-high);
   --color-on-surface-variant: var(--ml-on-surface-variant);
   --color-outline: var(--ml-outline);
 
@@ -143,5 +158,29 @@
      in a hand-styled app. */
   :focus-visible {
     @apply outline-primary outline-2 outline-offset-2;
+  }
+}
+
+@layer utilities {
+  /* Digits on a fixed pitch, so a column of money or a changing counter does not
+     shift width as the digits change. Inter ships the feature; it is off by
+     default because proportional digits read better *inside a sentence*. Use it
+     on figures that line up or update, not on running text. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Nothing below MOTION_INTENSITY 3 in this app, but `transition-colors` is on
+   most interactive surfaces, and someone who asked the OS for less movement
+   should get none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

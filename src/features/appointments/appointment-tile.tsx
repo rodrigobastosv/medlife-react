@@ -45,7 +45,7 @@ export function AppointmentTile({
   return (
     <Link
       to={to ?? routes.patient(appointment.patientId)}
-      className="bg-surface-container hover:bg-primary-container/50 flex flex-col gap-2 rounded-l p-4 transition-colors"
+      className="bg-surface-container-low border-outline/70 hover:bg-surface-container-high flex flex-col gap-2 rounded-l border p-4 transition-colors"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold">
@@ -68,7 +68,7 @@ export function AppointmentTile({
 
       {finance !== null && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold">{formatCurrency(finance.amount)}</span>
+          <span className="nums font-semibold">{formatCurrency(finance.amount)}</span>
           <span className="text-on-surface-variant">{paymentLabel(finance)}</span>
           {finance.invoiceStatus !== 'none' && (
             <Tag tone={isInvoicePending(finance.invoiceStatus) ? 'warning' : 'success'}>

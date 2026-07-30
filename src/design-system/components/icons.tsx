@@ -1,5 +1,7 @@
 import type { SVGProps } from 'react';
 
+import { cn } from '@/design-system/cn';
+
 /**
  * The icons the app uses, as inline SVG.
  *
@@ -11,12 +13,16 @@ import type { SVGProps } from 'react';
  */
 type IconProps = SVGProps<SVGSVGElement>;
 
-function Icon({ children, ...rest }: IconProps) {
+function Icon({ children, className, ...rest }: IconProps) {
   return (
     <svg
       viewBox="0 -960 960 960"
       fill="currentColor"
-      className="size-5 shrink-0"
+      // Merged, not overwritten. With `className` coming in through `...rest` a
+      // caller that passed a size (`<PeopleIcon className="size-6" />`) replaced
+      // the whole string and silently lost `shrink-0`, which let the icon get
+      // squashed by a long label in the flex rows these sit in.
+      className={cn('size-5 shrink-0', className)}
       // Icons here are always beside a label or inside a button with an
       // aria-label, so they are decorative to a screen reader.
       aria-hidden
