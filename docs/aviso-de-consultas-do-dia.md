@@ -1,45 +1,58 @@
 # Avisar o médico que tem consultas no dia
 
 Análise da issue [#6](https://github.com/rodrigobastosv/medlife-react/issues/6).
-Nada aqui foi implementado — o objetivo é escolher o caminho antes de escrever
-código, porque as opções custam de zero a várias tardes e algumas exigem mudança
-de schema.
 
-## A restrição que decide quase tudo
+> **Decidido.** Duas coisas saíram desta análise e já estão neste PR: a consulta
+> passou a ter **horário** (era a falha de fundo — veja abaixo) e a Home passou a
+> mostrar **as consultas do dia**. O aviso propriamente dito — e-mail, push ou
+> notificação local — fica para depois; a comparação das opções continua válida
+> e está preservada abaixo para quando for a hora.
 
-`appointments.scheduled_date` é **`date`**, não `timestamptz`:
+## A falha que a análise descobriu — corrigida
+
+`appointments.scheduled_date` era **`date`**, não `timestamptz`:
 
 ```sql
 -- supabase/migrations/schema.sql (repositório do app Flutter)
 scheduled_date       date not null,
 ```
 
-Ou seja: **o sistema não sabe a que horas é a consulta.** Isso elimina de
-imediato qualquer aviso do tipo "sua consulta é daqui a 30 minutos" — não existe
-dado para isso. O que dá para fazer hoje é exatamente o que a issue pede: um
-aviso **diário**, do tipo "você tem 4 consultas hoje".
+Ou seja: **o sistema não sabia a que horas era a consulta.** Isso não limitava só
+a notificação — a agenda não tinha ordem dentro do dia, e ninguém conseguia
+responder "que horas é meu paciente das 14h".
 
-Se em algum momento a vontade for avisar por consulta, o primeiro passo não é
-notificação, é uma coluna de horário (e aí o formulário, a agenda e os
-relatórios acompanham). Vale decidir isso antes, porque muda o que se constrói
-aqui.
+Corrigido em `supabase/migrations/004_appointment_scheduled_time.sql`, com uma
+coluna nova em vez de converter `scheduled_date` para `timestamptz`. O motivo é
+que o banco é compartilhado com o app Flutter, que filtra intervalos assim:
 
-## Um buraco mais barato que qualquer notificação
-
-A Home diz **"Seu resumo de hoje"** e não mostra as consultas de hoje. Ela
-mostra pacientes cadastrados, recalls pendentes e retornos futuros — nenhum dos
-três é "o que eu tenho hoje":
-
-```
-src/features/home/home-page.tsx  → usePatientsCountQuery, usePendingRecallsQuery,
-                                    useUpcomingReturnsQuery
+```dart
+.gte('scheduled_date', fromStr).lte('scheduled_date', toStr)
 ```
 
-Antes de qualquer infraestrutura de push, o aviso mais barato é a tela já
-existente cumprir o que o subtítulo promete. Não substitui uma notificação (só
-funciona quando o app é aberto), mas é meia hora de trabalho, não depende de
-permissão do navegador e serve de base para todo o resto — qualquer opção abaixo
-precisa da mesma consulta "consultas de hoje deste médico".
+Com `date`, isso pega o dia inteiro. Com `timestamptz`, `lte '2026-07-31'`
+passaria a significar `<= 2026-07-31 00:00:00` e sumiria com todas as consultas
+do último dia do intervalo — na agenda e nos relatórios, em silêncio, sem erro
+nenhum. Uma coluna aditiva não quebra quem não a seleciona.
+
+A coluna é `null` porque as consultas antigas não têm horário e não há como
+inventá-lo. Quem exige é o formulário, para os registros novos.
+
+Com o horário no lugar, o aviso por consulta ("seu paciente chega em 30
+minutos") deixa de ser impossível e passa a ser só uma escolha de produto.
+
+## Um buraco mais barato que qualquer notificação — fechado
+
+A Home dizia **"Seu resumo de hoje"** e não mostrava as consultas de hoje:
+mostrava pacientes cadastrados, recalls pendentes e retornos futuros — nenhum
+dos três é "o que eu tenho hoje".
+
+Agora a primeira seção da Home é **Consultas de hoje**, em ordem de horário, com
+um contador ao lado dos outros dois.
+
+Isso não substitui uma notificação: só funciona quando o app é aberto. Mas não
+depende de permissão nenhuma, e era pré-requisito de qualquer opção abaixo —
+todas precisam da mesma consulta "consultas de hoje deste médico", que agora
+existe como `fetchAppointmentsOnDay`.
 
 ## As opções
 
@@ -112,20 +125,21 @@ caixa de entrada.
 
 Em etapas, do que já paga sozinho para o que só vale se o anterior não bastar:
 
-1. **Mostrar "consultas de hoje" na Home.** Barato, sem infraestrutura, conserta
-   uma promessa que a tela já faz. Faça isso primeiro, independente do resto.
-2. **E-mail diário** via `pg_cron` + Edge Function. Resolve o pedido da issue
-   para valer (chega com o app fechado, em qualquer aparelho) sem tocar no
-   cliente e sem depender de permissão.
-3. **Web Push** só se, depois de (1) e (2), ainda houver vontade de ver o aviso
-   na tela de bloqueio — e sabendo que no iPhone depende de instalar o app na
-   tela de início.
+1. ~~**Mostrar "consultas de hoje" na Home.**~~ **Feito neste PR**, junto com o
+   horário da consulta.
+2. **E-mail diário** via `pg_cron` + Edge Function. É o próximo passo quando o
+   aviso com o app fechado virar prioridade: chega em qualquer aparelho, sem
+   tocar no cliente e sem depender de permissão.
+3. **Web Push** só se (2) não bastar e ainda houver vontade de ver o aviso na
+   tela de bloqueio — sabendo que no iPhone depende de instalar o app na tela de
+   início.
 4. **Notificação local no Flutter** apenas se o app Flutter for continuar sendo
    o que ela usa no dia a dia. Se o plano é migrar para o React, não invista
    aqui.
 
-E, antes de qualquer coisa que dependa de horário: decidir se `scheduled_date`
-vira `timestamptz`. Sem isso, o teto de qualquer opção é o aviso diário.
+Agora que existe horário, nada disso está mais limitado ao resumo diário — um
+aviso por consulta passou a ser possível. Continua sendo decisão de produto, não
+de schema.
 
 ## Fontes
 

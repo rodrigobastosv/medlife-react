@@ -7,6 +7,7 @@ import type { Appointment } from '@/domain/appointments/appointment';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import {
   usePendingRecallsQuery,
+  useTodayAppointmentsQuery,
   useUpcomingReturnsQuery,
 } from '@/features/appointments/use-appointments';
 import { usePatientsCountQuery } from '@/features/patients/use-patients';
@@ -14,6 +15,7 @@ import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
 import {
   BellIcon,
+  CalendarIcon,
   ChevronRightIcon,
   PeopleIcon,
   RepeatIcon,
@@ -33,6 +35,7 @@ import { SkeletonList } from '@/design-system/components/skeleton';
  */
 export function HomePage() {
   const patientsCount = usePatientsCountQuery();
+  const today = useTodayAppointmentsQuery();
   const recalls = usePendingRecallsQuery();
   const returns = useUpcomingReturnsQuery();
 
@@ -59,7 +62,8 @@ export function HomePage() {
           <ChevronRightIcon className="size-6" />
         </Link>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <SummaryCard icon={<CalendarIcon />} label="Consultas hoje" value={today.data?.length} />
           <SummaryCard icon={<BellIcon />} label="Recalls pendentes" value={recalls.data?.length} />
           <SummaryCard
             icon={<RepeatIcon />}
@@ -67,6 +71,20 @@ export function HomePage() {
             value={returns.data?.length}
           />
         </div>
+
+        {/* First, and above the rest: the subtitle promises "seu resumo de hoje",
+            and until now the screen answered with totals and future dates. This
+            is the only block on it that says what is happening today. */}
+        <Section title="Consultas de hoje">
+          <AppointmentList
+            isPending={today.isPending}
+            error={today.error}
+            appointments={today.data}
+            emptyTitle="Nenhuma consulta hoje"
+            emptyMessage="Nada marcado para hoje. As consultas do dia aparecem aqui, em ordem de horário."
+            emptyIcon={<CalendarIcon />}
+          />
+        </Section>
 
         <Section title="Recalls pendentes">
           <AppointmentList

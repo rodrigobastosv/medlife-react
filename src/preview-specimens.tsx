@@ -33,6 +33,7 @@ const APPOINTMENTS: readonly Appointment[] = [
     id: '1',
     patientId: 'p1',
     scheduledDate: new Date(2026, 6, 14),
+    scheduledTime: '09:30',
     type: 'first_visit',
     location: 'oncovie',
     status: 'completed',
@@ -51,6 +52,7 @@ const APPOINTMENTS: readonly Appointment[] = [
     id: '2',
     patientId: 'p2',
     scheduledDate: new Date(2026, 6, 22),
+    scheduledTime: '14:00',
     type: 'first_visit',
     location: 'oncovie',
     status: 'scheduled',
@@ -69,6 +71,9 @@ const APPOINTMENTS: readonly Appointment[] = [
     id: '3',
     patientId: 'p3',
     scheduledDate: new Date(2026, 6, 28),
+    // Sem horário de propósito: é uma consulta anterior à coluna existir, e o
+    // tile precisa mostrar só a data em vez de um traço sem sentido.
+    scheduledTime: null,
     type: 'first_visit',
     location: 'oncovie',
     status: 'no_show',

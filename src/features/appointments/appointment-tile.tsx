@@ -49,9 +49,7 @@ export function AppointmentTile({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold">
-          {showPatientName
-            ? (appointment.patientName ?? 'Paciente')
-            : formatDate(appointment.scheduledDate)}
+          {showPatientName ? (appointment.patientName ?? 'Paciente') : formatDateTime(appointment)}
         </span>
         <Tag tone={statusTone[appointment.status]}>
           {appointmentStatusLabel[appointment.status]}
@@ -59,7 +57,7 @@ export function AppointmentTile({
       </div>
 
       <div className="text-on-surface-variant flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        {showPatientName && <span>{formatDate(appointment.scheduledDate)}</span>}
+        {showPatientName && <span>{formatDateTime(appointment)}</span>}
         <span aria-hidden>·</span>
         <span>{appointmentTypeLabel[appointment.type]}</span>
         <span aria-hidden>·</span>
@@ -91,6 +89,16 @@ export function AppointmentTile({
     </Link>
   );
 }
+
+/**
+ * "14/07/2026 · 09:30", or just the date on an appointment recorded before the
+ * time column existed. No placeholder for the missing time: a row of dashes in
+ * a list says nothing, and the form asks for one the moment it is edited.
+ */
+const formatDateTime = (appointment: Appointment): string =>
+  appointment.scheduledTime === null
+    ? formatDate(appointment.scheduledDate)
+    : `${formatDate(appointment.scheduledDate)} · ${appointment.scheduledTime}`;
 
 const statusTone: Record<AppointmentStatus, TagTone> = {
   scheduled: 'primary',
