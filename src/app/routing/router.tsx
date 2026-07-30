@@ -29,7 +29,8 @@ import { SettingsPage } from '@/features/settings/settings-page';
  * rules of the whole app on one screen:
  *
  *   RequireGuest    → sign-in, sign-up
- *   RequireAuth     → AppShell → RequireActiveDoctor → the working screens
+ *   RequireAuth     → AppShell → Ajustes (sem guard: é por onde se sai)
+ *                                RequireActiveDoctor → the working screens
  *                                RequireDoctor       → reports, secretaries
  *
  * A screen added under the wrong parent is a visible mistake here, where a
@@ -52,6 +53,16 @@ export const router = createBrowserRouter([
         // change — which is also what preserves its scroll position.
         element: <AppShell />,
         children: [
+          // Ajustes fica fora do RequireActiveDoctor de propósito, e é a única
+          // rota do shell que fica. É a tela que tem o botão Sair: dentro do
+          // guard, uma secretária sem vínculo ativo via a mensagem de "nenhum
+          // médico vinculado" em *todas* as telas, inclusive nesta, e não tinha
+          // como sair da conta pela interface — só limpando o localStorage.
+          //
+          // A página aguenta a situação: `canSwitchDoctor` é falso com a lista
+          // de médicos vazia, então o card de médico ativo simplesmente não
+          // aparece, e nada mais aqui depende de um owner.
+          { path: routes.settings, element: <SettingsPage /> },
           {
             element: <RequireActiveDoctor />,
             children: [
@@ -66,7 +77,6 @@ export const router = createBrowserRouter([
               { path: routePatterns.editPatient, element: <PatientFormPage /> },
               { path: routePatterns.newAppointment, element: <AppointmentFormPage /> },
               { path: routePatterns.editAppointment, element: <AppointmentFormPage /> },
-              { path: routes.settings, element: <SettingsPage /> },
             ],
           },
           {
