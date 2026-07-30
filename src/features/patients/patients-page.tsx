@@ -6,13 +6,14 @@ import { messageOf } from '@/core/errors';
 import { ageFromBirthDate } from '@/core/format';
 import { patientInitials, type Patient } from '@/domain/patients/patient';
 import { patientOriginLabel } from '@/domain/patients/patient-origin';
+import { PatientsOverview } from '@/features/patients/patients-overview';
 import { usePatientsQuery } from '@/features/patients/use-patients';
 import { buttonClasses } from '@/design-system/components/button-classes';
 import { EmptyState } from '@/design-system/components/empty-state';
 import { TextField } from '@/design-system/components/form-fields';
 import { PeopleIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
-import { SkeletonList } from '@/design-system/components/skeleton';
+import { Skeleton, SkeletonList } from '@/design-system/components/skeleton';
 import { Tag } from '@/design-system/components/tag';
 
 export function PatientsPage() {
@@ -46,6 +47,18 @@ export function PatientsPage() {
           </Link>
         }
       />
+
+      {/* The overview describes the whole register, so it is deliberately
+          outside the search field's influence: filtering to "Ana" should not
+          redraw the practice's age profile. It is skipped entirely on error —
+          the list below already explains what went wrong, and a second failure
+          message would only repeat it — and `PatientsOverview` renders nothing
+          when there are no patients at all. */}
+      {patients.isPending ? (
+        <Skeleton className="mb-6 h-64 w-full rounded-l" />
+      ) : patients.isError ? null : (
+        <PatientsOverview patients={patients.data} className="mb-6" />
+      )}
 
       <TextField
         label="Buscar"
