@@ -34,7 +34,7 @@ export async function fetchPatients(ownerId: string): Promise<Patient[]> {
     .select()
     .eq('owner_id', ownerId)
     .order('full_name', { ascending: true })
-    .returns<PatientRow[]>();
+    .overrideTypes<PatientRow[], { merge: false }>();
 
   if (error !== null) {
     throw new AppError('Não foi possível carregar os pacientes', error);

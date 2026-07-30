@@ -37,7 +37,7 @@ export async function fetchLinkedDoctors(userId: string): Promise<Profile[]> {
     .select('doctor_id, profiles!doctor_secretaries_doctor_id_fkey(id, role, full_name)')
     .eq('secretary_id', userId)
     .eq('status', 'active')
-    .returns<{ doctor_id: string; profiles: ProfileRow | null }[]>();
+    .overrideTypes<{ doctor_id: string; profiles: ProfileRow | null }[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar seus médicos', error);
 
