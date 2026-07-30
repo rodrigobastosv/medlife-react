@@ -1,0 +1,161 @@
+import { fromDateColumn, toDateColumn } from '@/core/format';
+import {
+  paymentMethodLabel,
+  supportsInstallments,
+  toAppointmentLocation,
+  toAppointmentStatus,
+  toAppointmentType,
+  toInvoiceStatus,
+  toPaymentMethod,
+  type AppointmentLocation,
+  type AppointmentStatus,
+  type AppointmentType,
+  type InvoiceStatus,
+  type PaymentMethod,
+} from '@/domain/appointments/appointment-enums';
+
+/**
+ * The money side of an appointment.
+ *
+ * It lives in its own table (`appointment_finances`) rather than in columns on
+ * `appointments`, because Postgres row-level security filters **rows, not
+ * columns**. Only by separating them can the database express "the secretary
+ * sees the appointment but not the amount".
+ *
+ * When this is `null` on an `Appointment`, the two cases are indistinguishable
+ * from here: either no finance row was ever recorded, or the reader is a
+ * secretary and RLS filtered it out. The UI decides what to show from the user's
+ * **role**, never from this field being null.
+ */
+export interface AppointmentFinance {
+  readonly amount: number;
+  readonly invoiceStatus: InvoiceStatus;
+  readonly paymentMethod: PaymentMethod | null;
+  readonly paymentInstallments: number | null;
+}
+
+export interface Appointment {
+  readonly id: string;
+  readonly patientId: string;
+  readonly scheduledDate: Date;
+  readonly type: AppointmentType;
+  readonly location: AppointmentLocation;
+  readonly status: AppointmentStatus;
+  readonly finance: AppointmentFinance | null;
+  /** Only populated when the appointment was loaded with the patient joined. */
+  readonly patientName: string | null;
+  readonly nextReturnDate: Date | null;
+  readonly recallDate: Date | null;
+  readonly notes: string | null;
+}
+
+export interface AppointmentFinanceRow {
+  amount: number | null;
+  invoice_status: string | null;
+  payment_method: string | null;
+  payment_installments: number | null;
+}
+
+export interface AppointmentRow {
+  id: string;
+  patient_id: string;
+  scheduled_date: string;
+  type: string | null;
+  location: string | null;
+  status: string | null;
+  next_return_date: string | null;
+  recall_date: string | null;
+  notes: string | null;
+  /** Present only when the select asked for the embed; `null` when RLS hid it. */
+  appointment_finances?: AppointmentFinanceRow | null;
+  /** Present only when the select asked for `patients(full_name)`. */
+  patients?: { full_name: string | null } | null;
+}
+
+export function toAppointment(row: AppointmentRow): Appointment {
+  const financeRow = row.appointment_finances ?? null;
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    scheduledDate: fromDateColumn(row.scheduled_date),
+    type: toAppointmentType(row.type),
+    location: toAppointmentLocation(row.location),
+    status: toAppointmentStatus(row.status),
+    finance:
+      financeRow === null
+        ? null
+        : {
+            amount: financeRow.amount ?? 0,
+            invoiceStatus: toInvoiceStatus(financeRow.invoice_status),
+            paymentMethod: toPaymentMethod(financeRow.payment_method),
+            paymentInstallments: financeRow.payment_installments,
+          },
+    patientName: row.patients?.full_name ?? null,
+    nextReturnDate: row.next_return_date === null ? null : fromDateColumn(row.next_return_date),
+    recallDate: row.recall_date === null ? null : fromDateColumn(row.recall_date),
+    notes: row.notes,
+  };
+}
+
+/** Zero when there is no visible finance row. Convenience for summing. */
+export const appointmentAmount = (appointment: Appointment): number =>
+  appointment.finance?.amount ?? 0;
+
+/** "Crédito 3x", "Pix", or an em dash when nothing was recorded. */
+export function paymentLabel(finance: AppointmentFinance): string {
+  const { paymentMethod, paymentInstallments } = finance;
+  if (paymentMethod === null) return '—';
+  if (supportsInstallments(paymentMethod) && paymentInstallments !== null) {
+    return `${paymentMethodLabel[paymentMethod]} ${paymentInstallments}x`;
+  }
+  return paymentMethodLabel[paymentMethod];
+}
+
+/* ------------------------------------------------------------------------- */
+/* Draft — what the form produces                                            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * `finance` is null when a secretary fills the form: she neither sees nor enters
+ * money. The appointment is then saved with no row in `appointment_finances`,
+ * and the doctor records the money later.
+ */
+export interface AppointmentDraft {
+  patientId: string;
+  scheduledDate: Date;
+  type: AppointmentType;
+  location: AppointmentLocation;
+  status: AppointmentStatus;
+  finance: AppointmentFinance | null;
+  nextReturnDate: Date | null;
+  recallDate: Date | null;
+  notes: string;
+}
+
+/** Only the clinical columns — the money is written to the other table. */
+export function appointmentDraftToColumns(draft: AppointmentDraft) {
+  return {
+    patient_id: draft.patientId,
+    scheduled_date: toDateColumn(draft.scheduledDate),
+    type: draft.type,
+    location: draft.location,
+    status: draft.status,
+    next_return_date: draft.nextReturnDate === null ? null : toDateColumn(draft.nextReturnDate),
+    recall_date: draft.recallDate === null ? null : toDateColumn(draft.recallDate),
+    notes: draft.notes.trim() === '' ? null : draft.notes.trim(),
+  };
+}
+
+export function financeToColumns(finance: AppointmentFinance) {
+  return {
+    amount: finance.amount,
+    invoice_status: finance.invoiceStatus,
+    payment_method: finance.paymentMethod,
+    // Instalments only mean something for credit; storing them for Pix would be
+    // a number nothing reads and everything has to explain.
+    payment_installments:
+      finance.paymentMethod !== null && supportsInstallments(finance.paymentMethod)
+        ? finance.paymentInstallments
+        : null,
+  };
+}
