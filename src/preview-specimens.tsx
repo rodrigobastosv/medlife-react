@@ -12,9 +12,18 @@
  */
 import { formatCurrency } from '@/core/format';
 import type { Appointment } from '@/domain/appointments/appointment';
+import {
+  APPOINTMENT_LOCATIONS,
+  APPOINTMENT_STATUSES,
+  APPOINTMENT_TYPES,
+  appointmentLocationLabel,
+  appointmentStatusLabel,
+  appointmentTypeLabel,
+} from '@/domain/appointments/appointment-enums';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { Button } from '@/design-system/components/button';
 import { Card, CardTitle } from '@/design-system/components/card';
+import { SelectField, TextAreaField, TextField } from '@/design-system/components/form-fields';
 import { BellIcon, PeopleIcon, RepeatIcon } from '@/design-system/components/icons';
 import { PageHeader, Section } from '@/design-system/components/page';
 import { Tag } from '@/design-system/components/tag';
@@ -126,6 +135,51 @@ function MoneyColumn() {
   );
 }
 
+/**
+ * Os controles de formulário, que antes não tinham espécime nenhum.
+ *
+ * Estão aqui principalmente pelo `SelectField`: a seta é desenhada pelo app, e a
+ * distância dela até a borda é o tipo de detalhe que só se confere olhando — nos
+ * dois temas, ao lado de um campo de texto e de um campo com erro, que é como
+ * ela aparece no formulário de consulta.
+ */
+function FormFields() {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-display text-lg font-semibold">Campos de formulário</h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField label="Data da consulta" type="date" defaultValue="2026-07-14" />
+        <SelectField
+          label="Tipo"
+          defaultValue="visit"
+          options={APPOINTMENT_TYPES.map((type) => ({
+            value: type,
+            label: appointmentTypeLabel[type],
+          }))}
+        />
+        <SelectField
+          label="Situação"
+          defaultValue="completed"
+          options={APPOINTMENT_STATUSES.map((status) => ({
+            value: status,
+            label: appointmentStatusLabel[status],
+          }))}
+        />
+        <SelectField
+          label="Local"
+          placeholder="Selecione"
+          error="Informe o local da consulta"
+          options={APPOINTMENT_LOCATIONS.map((location) => ({
+            value: location,
+            label: appointmentLocationLabel[location],
+          }))}
+        />
+      </div>
+      <TextAreaField label="Observações" hint="Aparece no histórico do paciente." />
+    </section>
+  );
+}
+
 export function Specimens() {
   return (
     <div className="flex flex-col gap-8">
@@ -141,6 +195,8 @@ export function Specimens() {
       </Section>
 
       <MoneyColumn />
+
+      <FormFields />
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold">Ações e status</h2>
