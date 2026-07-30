@@ -43,7 +43,7 @@ export async function fetchPatientAppointments(
     .eq('owner_id', scope.ownerId)
     .eq('patient_id', patientId)
     .order('scheduled_date', { ascending: false })
-    .returns<AppointmentRow[]>();
+    .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar as consultas', error);
   return data.map(toAppointment);
@@ -58,7 +58,7 @@ export async function fetchPendingRecalls(scope: Scope, asOf: Date): Promise<App
     .not('recall_date', 'is', null)
     .lte('recall_date', toDateColumn(asOf))
     .order('recall_date', { ascending: true })
-    .returns<AppointmentRow[]>();
+    .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar os recalls', error);
   return data.map(toAppointment);
@@ -72,7 +72,7 @@ export async function fetchUpcomingReturns(scope: Scope, from: Date): Promise<Ap
     .not('next_return_date', 'is', null)
     .gte('next_return_date', toDateColumn(from))
     .order('next_return_date', { ascending: true })
-    .returns<AppointmentRow[]>();
+    .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar os retornos', error);
   return data.map(toAppointment);
@@ -103,7 +103,7 @@ export async function fetchAgenda(
         `and(recall_date.gte.${from},recall_date.lte.${to})`,
     )
     .order('scheduled_date', { ascending: true })
-    .returns<AppointmentRow[]>();
+    .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar a agenda', error);
   return data.map(toAppointment);
@@ -121,7 +121,7 @@ export async function fetchAppointmentsInRange(
     .gte('scheduled_date', toDateColumn(range.from))
     .lte('scheduled_date', toDateColumn(range.to))
     .order('scheduled_date', { ascending: true })
-    .returns<AppointmentRow[]>();
+    .overrideTypes<AppointmentRow[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar os dados do relatório', error);
   return data.map(toAppointment);
@@ -149,7 +149,7 @@ export async function fetchFirstAppointmentDates(scope: Scope, until: Date): Pro
     .select('patient_id, scheduled_date')
     .eq('owner_id', scope.ownerId)
     .lte('scheduled_date', toDateColumn(until))
-    .returns<{ patient_id: string; scheduled_date: string }[]>();
+    .overrideTypes<{ patient_id: string; scheduled_date: string }[], { merge: false }>();
 
   if (error !== null) throw new AppError('Não foi possível carregar os dados do relatório', error);
 

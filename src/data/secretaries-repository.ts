@@ -12,13 +12,16 @@ export async function fetchSecretaries(doctorId: string): Promise<SecretaryLink[
       .select('secretary_id, profiles!doctor_secretaries_secretary_id_fkey(id, full_name)')
       .eq('doctor_id', doctorId)
       .eq('status', 'active')
-      .returns<{ secretary_id: string; profiles: Pick<ProfileRow, 'id' | 'full_name'> | null }[]>(),
+      .overrideTypes<
+        { secretary_id: string; profiles: Pick<ProfileRow, 'id' | 'full_name'> | null }[],
+        { merge: false }
+      >(),
     supabase
       .from(Table.secretaryInvites)
       .select('id, email')
       .eq('doctor_id', doctorId)
       .eq('status', 'pending')
-      .returns<{ id: string; email: string }[]>(),
+      .overrideTypes<{ id: string; email: string }[], { merge: false }>(),
   ]);
 
   if (links.error !== null || invites.error !== null) {
