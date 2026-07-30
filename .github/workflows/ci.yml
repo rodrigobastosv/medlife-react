@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Um merge logo após o outro não deve disputar o deploy. Filas por ref e
+# deixa a execução mais nova vencer — menos a que já está publicando.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  qualidade:
+    name: Qualidade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Checar formatação
+        run: npx prettier --check .
+
+      - name: Lint
+        run: npm run lint
+
+      # Sem VITE_* de propósito. O guard do src/core/env.ts estoura em runtime,
+      # não em build — então o bundle compila, e é só isso que interessa aqui.
+      # Assim um PR de fork (que não recebe secrets) também passa.
+      # `npm run build` roda `tsc -b`, então isso cobre tipos e bundle.
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: qualidade
+    # Só publica em merge na main. Em PR o job inteiro é pulado.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Aqui os valores são os de verdade: o Vite os inlina no bundle.
+      # A publishable key é pública por design (protegida por RLS no Supabase);
+      # nunca use uma service_role key aqui.
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      # Falha cedo e com mensagem clara se as credenciais não entraram no
+      # bundle — secret vazio compila liso e só quebra no navegador.
+      - name: Verificar que as credenciais foram para o bundle
+        run: |
+          grep -rqE 'https://[a-z0-9]+\.supabase\.co' dist/assets/*.js \
+            || { echo "::error::VITE_SUPABASE_URL não chegou ao bundle (secret vazio?)"; exit 1; }
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: medlife-c27492
+          channelId: live
+
+      - name: Smoke test do site publicado
+        run: |
+          set -e
+          URL=https://medlife-react.web.app
+          # A CDN leva alguns segundos para propagar o release novo.
+          sleep 15
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/")
+          test "$code" = "200" || { echo "::error::/ retornou $code"; exit 1; }
+          # Deep link precisa cair no rewrite de SPA, não em 404.
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/patients")
+          test "$code" = "200" || { echo "::error::deep link retornou $code (rewrite quebrado?)"; exit 1; }
+          echo "Smoke test OK: $URL"

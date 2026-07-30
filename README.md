@@ -50,8 +50,8 @@ Two rules carry most of the weight:
 
 ### Where the Flutter concepts went
 
-| Flutter / Dart                      | Here                                                              |
-| ----------------------------------- | ----------------------------------------------------------------- |
+| Flutter / Dart                      | Here                                                               |
+| ----------------------------------- | ------------------------------------------------------------------ |
 | Cubit + state class                 | `useQuery` / `useMutation` (server state) + `useState` (UI state)  |
 | `PresentationCubit` loading events  | `isPending` from the query; a skeleton or a spinner                |
 | `emitPresentation(XError(...))`     | a thrown `AppError`, shown by the page as a toast                  |
