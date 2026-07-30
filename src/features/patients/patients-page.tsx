@@ -5,13 +5,20 @@ import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
 import { ageFromBirthDate } from '@/core/format';
 import { patientInitials, type Patient } from '@/domain/patients/patient';
+import {
+  ageBandDescription,
+  ageBandOfPatient,
+  ageBandPhrase,
+  findAgeBand,
+  type AgeBand,
+} from '@/domain/patients/patient-age-summary';
 import { patientOriginLabel } from '@/domain/patients/patient-origin';
 import { PatientsOverview } from '@/features/patients/patients-overview';
 import { usePatientsQuery } from '@/features/patients/use-patients';
 import { buttonClasses } from '@/design-system/components/button-classes';
 import { EmptyState } from '@/design-system/components/empty-state';
 import { TextField } from '@/design-system/components/form-fields';
-import { PeopleIcon, PlusIcon } from '@/design-system/components/icons';
+import { CloseIcon, PeopleIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { Skeleton, SkeletonList } from '@/design-system/components/skeleton';
 import { Tag } from '@/design-system/components/tag';
@@ -19,6 +26,12 @@ import { Tag } from '@/design-system/components/tag';
 export function PatientsPage() {
   const patients = usePatientsQuery();
   const [search, setSearch] = useState('');
+
+  // The age band clicked on the chart above, as a band label. It lives here
+  // rather than inside `PatientsOverview` because it filters *this* list — the
+  // chart only reports which bar was pressed.
+  const [selectedBandLabel, setSelectedBandLabel] = useState<string | null>(null);
+  const selectedBand = selectedBandLabel === null ? undefined : findAgeBand(selectedBandLabel);
 
   // `useDeferredValue` lets the input stay responsive while the (potentially
   // long) filtered list re-renders at a lower priority. The field updates on
@@ -31,9 +44,14 @@ export function PatientsPage() {
   // Filtering runs on every render otherwise — including renders caused by
   // something entirely unrelated. `useMemo` ties the work to its actual inputs.
   const filtered = useMemo(
-    () => filterPatients(patients.data ?? [], deferredSearch),
-    [patients.data, deferredSearch],
+    () => filterPatients(patients.data ?? [], deferredSearch, selectedBandLabel),
+    [patients.data, deferredSearch, selectedBandLabel],
   );
+
+  // The two filters are independent, and the empty state has to tell "no
+  // patients at all" apart from "the filters hid them" — which is not the same
+  // question as whether the search box has text in it.
+  const isFiltered = search.trim() !== '' || selectedBandLabel !== null;
 
   return (
     <Page>
@@ -55,9 +73,14 @@ export function PatientsPage() {
           message would only repeat it — and `PatientsOverview` renders nothing
           when there are no patients at all. */}
       {patients.isPending ? (
-        <Skeleton className="mb-6 h-64 w-full rounded-l" />
+        <Skeleton className="mb-6 h-20 w-full rounded-l" />
       ) : patients.isError ? null : (
-        <PatientsOverview patients={patients.data} className="mb-6" />
+        <PatientsOverview
+          patients={patients.data}
+          selectedBandLabel={selectedBandLabel}
+          onSelectBand={setSelectedBandLabel}
+          className="mb-6"
+        />
       )}
 
       <TextField
@@ -68,6 +91,24 @@ export function PatientsPage() {
         onChange={(event) => setSearch(event.target.value)}
         containerClassName="mb-6"
       />
+
+      {/* The band filter is set from a chart that may well be collapsed by the
+          time the user reads the list, so it needs a visible home of its own —
+          otherwise the list is silently short and nothing on screen says why. */}
+      {selectedBand !== undefined && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-on-surface-variant text-sm">Faixa etária:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedBandLabel(null)}
+            aria-label={`Remover filtro de faixa etária: ${ageBandDescription(selectedBand)}`}
+            className="bg-primary-container text-on-primary-container focus-visible:outline-primary hover:bg-primary-container/70 inline-flex cursor-pointer items-center gap-1 rounded-full py-1 pr-2 pl-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {ageBandDescription(selectedBand)}
+            <CloseIcon className="size-4" />
+          </button>
+        </div>
+      )}
 
       {patients.isPending ? (
         <SkeletonList rows={4} />
@@ -82,8 +123,9 @@ export function PatientsPage() {
       ) : filtered.length === 0 ? (
         // "Nothing yet" and "nothing matched" are different situations and read
         // differently: one invites a first record, the other says the filter is
-        // hiding things.
-        search.trim() === '' ? (
+        // hiding things — and it names *which* filter, since the age band can be
+        // the one at fault while the search box sits empty.
+        !isFiltered ? (
           <EmptyState
             icon={<PeopleIcon />}
             title="Nenhum paciente ainda"
@@ -93,7 +135,12 @@ export function PatientsPage() {
           <EmptyState
             icon={<PeopleIcon />}
             title="Nada encontrado"
-            message={`Nenhum paciente corresponde a "${search}".`}
+            message={noMatchMessage(search, selectedBand)}
+            actionLabel="Limpar filtros"
+            onAction={() => {
+              setSearch('');
+              setSelectedBandLabel(null);
+            }}
           />
         )
       ) : (
@@ -139,8 +186,18 @@ function PatientTile({ patient }: { patient: Patient }) {
   );
 }
 
+/** "Nenhum paciente de 70 a 79 anos corresponde a "ana"." and its simpler forms. */
+function noMatchMessage(search: string, band: AgeBand | undefined): string {
+  const term = search.trim();
+  const who = band === undefined ? 'paciente' : `paciente ${ageBandPhrase(band)}`;
+  return term === '' ? `Nenhum ${who} cadastrado.` : `Nenhum ${who} corresponde a "${term}".`;
+}
+
 /**
- * Search over name, CPF and phone.
+ * Search over name, CPF and phone, narrowed to an age band.
+ *
+ * The two are ANDed: the band comes from the chart above and the term from the
+ * field, and a user who has both set is asking for the intersection.
  *
  * `normalize` strips accents (via Unicode decomposition, which splits "á" into
  * "a" + a combining mark that the regex then removes) so "Jose" finds "José" —
@@ -148,13 +205,25 @@ function PatientTile({ patient }: { patient: Patient }) {
  * accent, which nobody does. Digits are stripped from CPF and phone so "11987"
  * matches "(11) 98765-4321".
  */
-function filterPatients(patients: readonly Patient[], search: string): Patient[] {
+function filterPatients(
+  patients: readonly Patient[],
+  search: string,
+  bandLabel: string | null,
+): Patient[] {
+  // One reference date for the whole pass. Reading the clock per patient would
+  // be both wasteful and, at midnight on someone's birthday, inconsistent.
+  const now = new Date();
+  const byBand =
+    bandLabel === null
+      ? patients
+      : patients.filter((patient) => ageBandOfPatient(patient, now)?.label === bandLabel);
+
   const term = normalize(search);
-  if (term === '') return [...patients];
+  if (term === '') return [...byBand];
 
   const digits = term.replace(/\D/g, '');
 
-  return patients.filter((patient) => {
+  return byBand.filter((patient) => {
     if (normalize(patient.fullName).includes(term)) return true;
     if (digits === '') return false;
     return (

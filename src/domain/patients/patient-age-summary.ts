@@ -16,7 +16,7 @@ import type { Patient } from '@/domain/patients/patient';
 /* ------------------------------------------------------------------------- */
 
 export interface AgeBand {
-  /** Axis caption under the bar ("45–59"). Unique — it is also the React key. */
+  /** Axis caption under the bar ("70–79"). Unique — it is also the React key. */
   readonly label: string;
   /** Inclusive lower bound, in whole years. */
   readonly min: number;
@@ -25,30 +25,63 @@ export interface AgeBand {
 }
 
 /**
- * Six bands, weighted towards adults.
+ * Seven bands, cut for a geriatric practice.
  *
- * These are not equal-width buckets on purpose. Equal widths (0–9, 10–19, …)
- * would spend half the chart on ages this practice barely sees and squash the
- * range where its patients actually are. The split used here is the one a
- * clinic reads without a legend: everything under 18 is a single "minors"
- * bucket, adults are cut at the points where risk and follow-up change (30, 45,
- * 60), and 75+ is left open because there is no meaningful ceiling.
+ * The resolution is deliberately lopsided: everything below 40 collapses into a
+ * single bucket, and from there the bands are plain decades all the way up. A
+ * geriatrician's patients cluster in the range a general split would flatten
+ * into one or two bars — "60+" says almost nothing to someone whose whole
+ * caseload is 60+, whereas the difference between a register centred on the 70s
+ * and one centred on the 80s is the difference between two practices.
+ *
+ * Under-40s are not dropped, only merged. They are rare here but they do exist
+ * (an early-onset referral, a patient inherited from another specialty), and a
+ * bucket that is usually empty still has to be able to show them rather than
+ * lose them off the bottom of the chart.
  *
  * The last band **must** keep `max: null` — the bucketing below relies on it to
- * guarantee that every age lands somewhere.
+ * guarantee that every age lands somewhere, including centenarians.
  */
 export const AGE_BANDS: readonly AgeBand[] = [
-  { label: '0–17', min: 0, max: 17 },
-  { label: '18–29', min: 18, max: 29 },
-  { label: '30–44', min: 30, max: 44 },
-  { label: '45–59', min: 45, max: 59 },
-  { label: '60–74', min: 60, max: 74 },
-  { label: '75+', min: 75, max: null },
+  { label: 'Até 39', min: 0, max: 39 },
+  { label: '40–49', min: 40, max: 49 },
+  { label: '50–59', min: 50, max: 59 },
+  { label: '60–69', min: 60, max: 69 },
+  { label: '70–79', min: 70, max: 79 },
+  { label: '80–89', min: 80, max: 89 },
+  { label: '90+', min: 90, max: null },
 ];
 
-/** "45 a 59 anos" / "75 anos ou mais" — the spoken form, for tooltips. */
-export const ageBandDescription = (band: AgeBand): string =>
-  band.max === null ? `${band.min} anos ou mais` : `${band.min} a ${band.max} anos`;
+/**
+ * "70 a 79 anos" / "90 anos ou mais" / "Menos de 40 anos" — the spoken form, for
+ * tooltips.
+ *
+ * The `min === 0` case is worded as an upper bound rather than as "0 a 39 anos",
+ * which would read as a claim that the practice sees newborns. The bucket means
+ * "everyone below the range this clinic works in", and that is how it is said.
+ * It is the one form that starts with a letter rather than a digit, and it is
+ * capitalised because every caller uses this at the start of a sentence.
+ */
+export const ageBandDescription = (band: AgeBand): string => {
+  if (band.min === 0) return `Menos de ${(band.max ?? 0) + 1} anos`;
+  if (band.max === null) return `${band.min} anos ou mais`;
+  return `${band.min} a ${band.max} anos`;
+};
+
+/**
+ * The same range as a phrase that attaches to a noun — "paciente **de 70 a 79
+ * anos**", "paciente **com menos de 40 anos**".
+ *
+ * Separate from `ageBandDescription` because the preposition changes with the
+ * shape of the band, and pasting the standalone description into a sentence
+ * produces "Nenhum paciente 70 a 79 anos". A bare `de` reads wrong in front of
+ * "menos de", hence the two forms.
+ */
+export const ageBandPhrase = (band: AgeBand): string => {
+  if (band.min === 0) return `com menos de ${(band.max ?? 0) + 1} anos`;
+  if (band.max === null) return `com ${band.min} anos ou mais`;
+  return `de ${band.min} a ${band.max} anos`;
+};
 
 /* ------------------------------------------------------------------------- */
 /* Summary                                                                   */
@@ -100,13 +133,9 @@ export function summarizePatientAges(
   const ages: number[] = [];
 
   for (const patient of patients) {
-    if (patient.birthDate === null) continue;
+    const age = patientAge(patient, reference);
+    if (age === null) continue;
 
-    // Clamped at zero: a birth date in the future is a typo, and letting it
-    // through as a negative age would both miss every band and pull the average
-    // below anything a person can be. Treating it as a newborn keeps the
-    // patient visible in the chart, where the outlier can be spotted and fixed.
-    const age = Math.max(0, ageFromBirthDate(patient.birthDate, reference));
     ages.push(age);
 
     const index = bandIndexFor(age);
@@ -147,6 +176,36 @@ export function summarizePatientAges(
 
 /** True when at least one age is known — the precondition for drawing anything. */
 export const hasAgeData = (summary: PatientAgeSummary): boolean => summary.withBirthDate > 0;
+
+/**
+ * A patient's age in whole years, or `null` when their birth date is unknown.
+ *
+ * Clamped at zero: a birth date in the future is a typo, and letting it through
+ * as a negative age would both miss every band and pull the average below
+ * anything a person can be. Treating it as a newborn keeps the patient visible
+ * in the chart, where the outlier can be spotted and fixed.
+ */
+export function patientAge(patient: Patient, reference: Date = new Date()): number | null {
+  if (patient.birthDate === null) return null;
+  return Math.max(0, ageFromBirthDate(patient.birthDate, reference));
+}
+
+/**
+ * The band a patient falls in, or `null` when their age is unknown.
+ *
+ * This is the same lookup the summary counts with — deliberately, so that
+ * clicking a bar selects exactly the patients that bar counted. Two independent
+ * implementations would be free to disagree at a boundary, and the bar would
+ * then promise a number the list below it could not produce.
+ */
+export function ageBandOfPatient(patient: Patient, reference: Date = new Date()): AgeBand | null {
+  const age = patientAge(patient, reference);
+  return age === null ? null : (AGE_BANDS[bandIndexFor(age)] ?? null);
+}
+
+/** The band carrying this label, for turning a chart selection back into a band. */
+export const findAgeBand = (label: string): AgeBand | undefined =>
+  AGE_BANDS.find((band) => band.label === label);
 
 /**
  * The first band that can still hold this age.
