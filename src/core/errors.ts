@@ -14,6 +14,13 @@
  * What the `Result` type was really buying is that a failure carries a sentence
  * the user can read. `AppError` keeps exactly that: a human message plus the
  * original cause for the console.
+ *
+ * This channel covers the *asynchronous* half of the app — a query that was
+ * refused, a save that failed — and deliberately stops there. An exception
+ * thrown while **rendering** cannot be a toast, because there is no screen left
+ * to show it on; those are caught by the route boundary in
+ * `app/routing/route-error-page.tsx`. Two mechanisms, one each for the two ways
+ * a failure can arrive, and neither is a fallback for the other.
  */
 export class AppError extends Error {
   /**
