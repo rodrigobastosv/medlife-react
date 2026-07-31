@@ -12,6 +12,7 @@ import { patientOriginLabel } from '@/domain/patients/patient-origin';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { usePatientAppointmentsQuery } from '@/features/appointments/use-appointments';
 import { BackLink } from '@/features/navigation/back-link';
+import { PatientContactActions } from '@/features/patients/patient-contact-actions';
 import { useDeletePatientMutation, usePatientQuery } from '@/features/patients/use-patients';
 import { Button } from '@/design-system/components/button';
 import { buttonClasses } from '@/design-system/components/button-classes';
@@ -83,6 +84,10 @@ export function PatientDetailPage() {
         }
         actions={
           <>
+            {/* First, and before the edit/delete pair: on this screen the thing
+                somebody came to do is usually call the patient, not change the
+                record. It disappears entirely when there is no usable number. */}
+            <PatientContactActions phone={record.phone} patientName={record.fullName} />
             <Link
               to={routes.editPatient(record.id)}
               className={buttonClasses({ variant: 'outline', size: 'sm', className: 'gap-1.5' })}

@@ -11,6 +11,7 @@ import {
   type AppointmentStatus,
 } from '@/domain/appointments/appointment-enums';
 import { paymentLabel, type Appointment } from '@/domain/appointments/appointment';
+import { PatientContactActions } from '@/features/patients/patient-contact-actions';
 import { Tag, type TagTone } from '@/design-system/components/tag';
 
 /**
@@ -43,50 +44,71 @@ export function AppointmentTile({
   const { finance } = appointment;
 
   return (
-    <Link
-      to={to ?? routes.patient(appointment.patientId)}
-      className="bg-surface-container-low border-outline/70 hover:bg-surface-container-high flex flex-col gap-2 rounded-l border p-4 transition-colors"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-semibold">
-          {showPatientName ? (appointment.patientName ?? 'Paciente') : formatDateTime(appointment)}
-        </span>
-        <Tag tone={statusTone[appointment.status]}>
-          {appointmentStatusLabel[appointment.status]}
-        </Tag>
-      </div>
-
-      <div className="text-on-surface-variant flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        {showPatientName && <span>{formatDateTime(appointment)}</span>}
-        <span aria-hidden>·</span>
-        <span>{appointmentTypeLabel[appointment.type]}</span>
-        <span aria-hidden>·</span>
-        <span>{appointmentLocationLabel[appointment.location]}</span>
-      </div>
-
-      {finance !== null && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="nums font-semibold">{formatCurrency(finance.amount)}</span>
-          <span className="text-on-surface-variant">{paymentLabel(finance)}</span>
-          {finance.invoiceStatus !== 'none' && (
-            <Tag tone={isInvoicePending(finance.invoiceStatus) ? 'warning' : 'success'}>
-              {invoiceStatusLabel[finance.invoiceStatus]}
-            </Tag>
-          )}
+    // The card is a wrapper around the link rather than being the link, because
+    // the contact actions are anchors too and an <a> inside an <a> is invalid
+    // HTML that browsers resolve unpredictably. `overflow-hidden` is what lets
+    // the inner link keep square corners and still be clipped by the rounded
+    // border, so the hover fill reaches the edge without a gap.
+    <div className="bg-surface-container-low border-outline/70 flex flex-col overflow-hidden rounded-l border">
+      <Link
+        to={to ?? routes.patient(appointment.patientId)}
+        className="hover:bg-surface-container-high flex flex-col gap-2 p-4 transition-colors"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-semibold">
+            {showPatientName
+              ? (appointment.patientName ?? 'Paciente')
+              : formatDateTime(appointment)}
+          </span>
+          <Tag tone={statusTone[appointment.status]}>
+            {appointmentStatusLabel[appointment.status]}
+          </Tag>
         </div>
-      )}
 
-      {(appointment.nextReturnDate !== null || appointment.recallDate !== null) && (
-        <div className="flex flex-wrap gap-2">
-          {appointment.nextReturnDate !== null && (
-            <Tag tone="primary">Retorno em {formatDate(appointment.nextReturnDate)}</Tag>
-          )}
-          {appointment.recallDate !== null && (
-            <Tag tone="neutral">Recall em {formatDate(appointment.recallDate)}</Tag>
-          )}
+        <div className="text-on-surface-variant flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          {showPatientName && <span>{formatDateTime(appointment)}</span>}
+          <span aria-hidden>·</span>
+          <span>{appointmentTypeLabel[appointment.type]}</span>
+          <span aria-hidden>·</span>
+          <span>{appointmentLocationLabel[appointment.location]}</span>
         </div>
-      )}
-    </Link>
+
+        {finance !== null && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="nums font-semibold">{formatCurrency(finance.amount)}</span>
+            <span className="text-on-surface-variant">{paymentLabel(finance)}</span>
+            {finance.invoiceStatus !== 'none' && (
+              <Tag tone={isInvoicePending(finance.invoiceStatus) ? 'warning' : 'success'}>
+                {invoiceStatusLabel[finance.invoiceStatus]}
+              </Tag>
+            )}
+          </div>
+        )}
+
+        {(appointment.nextReturnDate !== null || appointment.recallDate !== null) && (
+          <div className="flex flex-wrap gap-2">
+            {appointment.nextReturnDate !== null && (
+              <Tag tone="primary">Retorno em {formatDate(appointment.nextReturnDate)}</Tag>
+            )}
+            {appointment.recallDate !== null && (
+              <Tag tone="neutral">Recall em {formatDate(appointment.recallDate)}</Tag>
+            )}
+          </div>
+        )}
+      </Link>
+
+      {/* Below the link, in its own bar: the row is "open this appointment" and
+          these two are "reach this patient" — two different destinations, so
+          they must not share one hit area. The phone is only on the appointment
+          when the listing joined the patient, so on a screen that did not (the
+          patient's own history, where the number is already in the header) this
+          renders nothing and the card is exactly what it was. */}
+      <PatientContactActions
+        phone={appointment.patientPhone}
+        patientName={appointment.patientName}
+        className="border-outline/70 border-t px-4 py-2"
+      />
+    </div>
   );
 }
 

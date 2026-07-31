@@ -55,6 +55,15 @@ export interface Appointment {
   readonly finance: AppointmentFinance | null;
   /** Only populated when the appointment was loaded with the patient joined. */
   readonly patientName: string | null;
+  /**
+   * The patient's phone, when the patient was joined — what the "ligar para o
+   * paciente" actions on a recall row dial.
+   *
+   * It is carried on the appointment rather than fetched per row because the
+   * listing already joins `patients`, and the alternative is one query per
+   * visible recall to read a column that was one word away in the select.
+   */
+  readonly patientPhone: string | null;
   readonly nextReturnDate: Date | null;
   readonly recallDate: Date | null;
   readonly notes: string | null;
@@ -96,8 +105,8 @@ export interface AppointmentRow {
   created_by?: string | null;
   /** Present only when the select asked for the embed; `null` when RLS hid it. */
   appointment_finances?: AppointmentFinanceRow | null;
-  /** Present only when the select asked for `patients(full_name)`. */
-  patients?: { full_name: string | null } | null;
+  /** Present only when the select asked for `patients(full_name, phone)`. */
+  patients?: { full_name: string | null; phone?: string | null } | null;
 }
 
 export function toAppointment(row: AppointmentRow): Appointment {
@@ -120,6 +129,7 @@ export function toAppointment(row: AppointmentRow): Appointment {
             paymentInstallments: financeRow.payment_installments,
           },
     patientName: row.patients?.full_name ?? null,
+    patientPhone: row.patients?.phone ?? null,
     nextReturnDate: row.next_return_date === null ? null : fromDateColumn(row.next_return_date),
     recallDate: row.recall_date === null ? null : fromDateColumn(row.recall_date),
     notes: row.notes,

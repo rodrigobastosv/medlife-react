@@ -45,6 +45,7 @@ const APPOINTMENTS: readonly Appointment[] = [
       paymentInstallments: null,
     },
     patientName: 'Marina Albuquerque',
+    patientPhone: '(85) 99999-8888',
     nextReturnDate: new Date(2026, 9, 14),
     recallDate: null,
     notes: null,
@@ -66,6 +67,7 @@ const APPOINTMENTS: readonly Appointment[] = [
       paymentInstallments: null,
     },
     patientName: 'Otávio Bandeira Filho',
+    patientPhone: '8533334444',
     nextReturnDate: null,
     recallDate: new Date(2026, 7, 3),
     notes: null,
@@ -84,6 +86,9 @@ const APPOINTMENTS: readonly Appointment[] = [
     status: 'no_show',
     finance: { amount: 92, invoiceStatus: 'none', paymentMethod: 'pix', paymentInstallments: null },
     patientName: 'Cecília Tavares',
+    // Sem telefone de propósito: o tile não mostra nenhuma ação de contato
+    // quando não há número — nem um botão desabilitado.
+    patientPhone: null,
     nextReturnDate: null,
     recallDate: null,
     notes: null,

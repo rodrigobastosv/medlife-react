@@ -28,10 +28,13 @@ interface Scope {
 const columns = (scope: Scope): string =>
   scope.canSeeFinances ? '*, appointment_finances(*)' : '*';
 
+// The phone rides along with the name because every listing that shows who is
+// coming is also where the "ligar para o paciente" actions live. It is one more
+// column on a join that is already being made, not a second round trip.
 const columnsWithPatient = (scope: Scope): string =>
   scope.canSeeFinances
-    ? '*, patients(full_name), appointment_finances(*)'
-    : '*, patients(full_name)';
+    ? '*, patients(full_name, phone), appointment_finances(*)'
+    : '*, patients(full_name, phone)';
 
 export async function fetchPatientAppointments(
   scope: Scope,
