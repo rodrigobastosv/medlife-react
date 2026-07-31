@@ -26,6 +26,7 @@ import { Card, CardTitle } from '@/design-system/components/card';
 import { SelectField, TextAreaField, TextField } from '@/design-system/components/form-fields';
 import { BellIcon, PeopleIcon, RepeatIcon } from '@/design-system/components/icons';
 import { PageHeader, Section } from '@/design-system/components/page';
+import { Switch } from '@/design-system/components/switch';
 import { Tag } from '@/design-system/components/tag';
 
 const APPOINTMENTS: readonly Appointment[] = [
@@ -47,6 +48,8 @@ const APPOINTMENTS: readonly Appointment[] = [
     nextReturnDate: new Date(2026, 9, 14),
     recallDate: null,
     notes: null,
+    createdAt: new Date(2026, 6, 1),
+    createdBy: 'd1',
   },
   {
     id: '2',
@@ -66,6 +69,8 @@ const APPOINTMENTS: readonly Appointment[] = [
     nextReturnDate: null,
     recallDate: new Date(2026, 7, 3),
     notes: null,
+    createdAt: new Date(2026, 6, 2),
+    createdBy: 'd1',
   },
   {
     id: '3',
@@ -82,6 +87,9 @@ const APPOINTMENTS: readonly Appointment[] = [
     nextReturnDate: null,
     recallDate: null,
     notes: null,
+    createdAt: new Date(2026, 6, 3),
+    // Sem autor, como toda linha anterior à coluna `created_by`.
+    createdBy: null,
   },
 ];
 
@@ -203,6 +211,8 @@ export function Specimens() {
 
       <FormFields />
 
+      <Switches />
+
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold">Ações e status</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -221,6 +231,44 @@ export function Specimens() {
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * Os dois estados do switch, lado a lado.
+ *
+ * O card de notificações inteiro não cabe aqui: ele depende de sessão, de query
+ * e da permissão do navegador, e nada disso existe nesta página. O que precisa
+ * ser olhado nos dois temas é o controle — principalmente o trilho desligado,
+ * que usa `bg-outline` e é o único elemento do design system cujo contraste
+ * muda de lado entre claro e escuro.
+ */
+function Switches() {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-display text-lg font-semibold">Switches</h2>
+      <Card className="flex flex-col gap-1">
+        <Switch
+          label="Consultas do dia"
+          description="Um resumo com quantas consultas você tem hoje."
+          isOn
+          onToggle={() => undefined}
+        />
+        <Switch
+          label="Pacientes para ligar"
+          description="Quantos pacientes estão na fila de recall vencido."
+          isOn={false}
+          onToggle={() => undefined}
+        />
+        <Switch
+          label="Nova consulta marcada"
+          description="Avisa quando outra pessoa marca uma consulta na sua agenda."
+          isOn={false}
+          isDisabled
+          onToggle={() => undefined}
+        />
+      </Card>
+    </section>
   );
 }
 

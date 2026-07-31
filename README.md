@@ -157,14 +157,150 @@ migrations in `../medlife/supabase/migrations/` in order (`schema.sql`,
 the Auth settings in that project's README — e-mail confirmation must stay
 **on**, and `http://localhost:3000/**` must be in the redirect allow-list.
 
-Then run `supabase/migrations/004_appointment_scheduled_time.sql` **from this
-repository**. It is the first schema change that originated here rather than in
-the Flutter app, which is why there is now a `supabase/` directory on this side
-too; the earlier ones still live only in `../medlife`. It is additive — a
-`scheduled_time` column — precisely so the Flutter app keeps working untouched.
-Because the database is shared, **any change here has to be safe for that app
-as well**: converting `scheduled_date` to `timestamptz` would have silently
-broken its date-range queries, which is why it was not done.
+Then run the migrations in `supabase/migrations/` **from this repository**, in
+order:
+
+- `004_appointment_scheduled_time.sql` — the first schema change that originated
+  here rather than in the Flutter app, which is why there is now a `supabase/`
+  directory on this side too; the earlier ones still live only in `../medlife`.
+- `005_notifications.sql` — `appointments.created_by`, and the
+  `notification_preferences` table behind the Notificações card in Ajustes.
+- `006_web_push.sql` — `push_subscriptions` and `notification_deliveries`, so the
+  server can reach a closed app. See [Notifications](#notifications) for the rest
+  of that setup, which also needs VAPID keys and a cron job.
+
+Both are additive, precisely so the Flutter app keeps working untouched. Because
+the database is shared, **any change here has to be safe for that app as well**:
+converting `scheduled_date` to `timestamptz` would have silently broken its
+date-range queries, which is why it was not done.
+
+## Notifications
+
+Opt-in, configured per user in Ajustes, and delivered by **Web Push** — so they
+arrive with the app closed. That is the whole point of the mechanism: a
+notification fired by the page can only happen while the page exists, and an
+installed PWA is still a page. What wakes a closed app is the browser's push
+service, and only a server can talk to it.
+
+The shape of it:
+
+```
+pg_cron  ──every minute──▶  supabase/functions/notify
+                                 │  plan.ts     what is due (pure)
+                                 │  queries.ts  the reads, service_role
+                                 └▶ push.ts     VAPID, @negrel/webpush
+                                        │
+                          push service (Google / Mozilla / Apple)
+                                        │
+                          public/sw-notifications.js  ── showNotification()
+```
+
+`plan.ts` is one pure function over a snapshot, which is what lets the rules be
+exercised with a fabricated clock instead of by waiting for one — the only
+practical way to check "at 07:29", "at 07:30" and "at 07:31 again". It used to
+run in the browser and was **moved** here, not copied: two copies of a rule are
+two rules the moment one is edited.
+
+Deduplication is `notification_deliveries`, whose primary key is the dedupe key.
+Claiming and recording are one `on conflict do nothing ... returning`, so two
+overlapping cron runs cannot both send the same notification.
+
+Two things follow from push being per-browser rather than per-account: the
+switches in Ajustes belong to the **account**, but permission and the
+subscription belong to each **browser** — so the same person authorises once on
+the phone and once on the desktop. And on iPhone there is no push at all until
+the app has been added to the home screen.
+
+Notifications do not work under `npm run dev`: they arrive through the service
+worker, and the worker is disabled there (it fights HMR). Use `npm run build &&
+npm run preview`.
+
+### Setting it up
+
+One-time, per Supabase project.
+
+**1. Generate the VAPID key pair.** It identifies this application server to
+every push service; the pair is generated once and then never changes, because
+rotating it invalidates every existing subscription.
+
+```bash
+deno run -A https://raw.githubusercontent.com/negrel/webpush/master/cmd/generate-vapid-keys.ts
+```
+
+**2. Give the public half to the frontend.** `VITE_VAPID_PUBLIC_KEY` in `.env`,
+and as a GitHub secret of the same name for the deploy build. Public by design —
+see the note in `.env.example`.
+
+**3. Give the whole pair to the function**, along with a contact address the push
+services can use to reach you, and a shared secret so the endpoint is not open to
+the internet.
+
+```bash
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase secrets set --project-ref <project-ref> \
+  VAPID_KEYS="$(python3 -c "import json;print(json.dumps(json.load(open('supabase/.vapid.json'))))")" \
+  VAPID_CONTACT="mailto:voce@exemplo.com" \
+  NOTIFY_SECRET="$(cat supabase/.notify-secret.txt)"
+npx supabase functions deploy notify --project-ref <project-ref> --no-verify-jwt
+```
+
+Both key files are gitignored, and the JSON is compacted onto one line because a
+multi-line secret value is where dotenv-style parsing tends to truncate.
+
+`--no-verify-jwt` is deliberate. Supabase puts its own JWT check in front of a
+function by default, which here would mean two gates gating the same thing: the
+caller is `pg_cron`, not a signed-in user, and there is no session for it to
+present. Leaving it on means either sending the (public) anon key along for no
+benefit, or debugging a 401 from the platform that looks exactly like a 401 from
+the function's own check. `NOTIFY_SECRET` is what protects this endpoint, and
+this makes that the whole truth rather than half of it.
+
+The function's own `deno.json` sits **inside** `supabase/functions/notify/`, not
+beside it. The remote bundler only uploads what is in the function's directory,
+so an import map one level up is silently absent at build time and every bare
+specifier fails to resolve.
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform and
+do not need setting. The service role key bypasses RLS, which is exactly why the
+function needs it and exactly why it must never reach a `VITE_` variable.
+
+**4. Run the migrations** `005_notifications.sql` and `006_web_push.sql` in the
+SQL Editor, then enable the two extensions and schedule the job. Read the shared
+secret back with `cat supabase/.notify-secret.txt` — it is deliberately never
+printed by the commands above:
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+select vault.create_secret('<NOTIFY_SECRET>', 'notify_secret');
+
+select cron.schedule('notify-every-minute', '* * * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'project_url')
+           || '/functions/v1/notify',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-notify-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'notify_secret')
+    ),
+    body := '{}'::jsonb
+  );
+$$);
+```
+
+Every minute, because that is the resolution of what is being decided: the
+summaries are configured to the minute and the reminder lead times are 15, 30 and
+60 of them. A run with nothing due is four small queries and no writes.
+
+The delivery log also needs pruning — the statement is commented at the bottom of
+`006_web_push.sql`.
+
+**Checking on it.** `select * from cron.job_run_details order by start_time desc
+limit 20;` for whether the job fired, and the function logs in the dashboard for
+what it decided; each run returns a summary of `{candidates, planned, sent,
+skipped, removed}`.
 
 ## Stack, and why
 

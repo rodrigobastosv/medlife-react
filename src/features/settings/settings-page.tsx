@@ -11,6 +11,7 @@ import { Card, CardTitle } from '@/design-system/components/card';
 import { cn } from '@/design-system/cn';
 import { LogoutIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
+import { NotificationSettingsCard } from '@/features/notifications/notification-settings-card';
 
 export function SettingsPage() {
   const { mode, setMode } = useTheme();
@@ -58,6 +59,8 @@ export function SettingsPage() {
             </div>
           </Card>
         )}
+
+        <NotificationSettingsCard />
 
         <Card className="flex flex-col gap-3">
           <CardTitle>Tema</CardTitle>

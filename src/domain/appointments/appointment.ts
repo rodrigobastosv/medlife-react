@@ -58,6 +58,18 @@ export interface Appointment {
   readonly nextReturnDate: Date | null;
   readonly recallDate: Date | null;
   readonly notes: string | null;
+  /** When the row was inserted — what the "nova consulta" notification reads. */
+  readonly createdAt: Date;
+  /**
+   * Who inserted it, from `auth.uid()` at insert time.
+   *
+   * `null` on every row written before the column existed, and that null is load
+   * bearing: it means "unknown", never "the owner". The notification that tells
+   * a doctor somebody else booked into their agenda compares this against the
+   * owner, so treating unknown as the owner would silence it and treating it as
+   * a stranger would announce the entire history at once.
+   */
+  readonly createdBy: string | null;
 }
 
 export interface AppointmentFinanceRow {
@@ -79,6 +91,9 @@ export interface AppointmentRow {
   next_return_date: string | null;
   recall_date: string | null;
   notes: string | null;
+  created_at: string;
+  /** Absent on rows written before the column existed. */
+  created_by?: string | null;
   /** Present only when the select asked for the embed; `null` when RLS hid it. */
   appointment_finances?: AppointmentFinanceRow | null;
   /** Present only when the select asked for `patients(full_name)`. */
@@ -108,6 +123,10 @@ export function toAppointment(row: AppointmentRow): Appointment {
     nextReturnDate: row.next_return_date === null ? null : fromDateColumn(row.next_return_date),
     recallDate: row.recall_date === null ? null : fromDateColumn(row.recall_date),
     notes: row.notes,
+    // Both come for free: every select in the repository is `*`, so these two
+    // columns were already crossing the wire and being dropped on the floor.
+    createdAt: fromDateColumn(row.created_at),
+    createdBy: row.created_by ?? null,
   };
 }
 

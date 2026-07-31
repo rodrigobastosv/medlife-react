@@ -28,3 +28,18 @@ dev-dist
 
 # Local env (contains the Supabase keys)
 .env
+
+# The VAPID key pair. The private half signs every push message, and it is
+# uploaded to Supabase as a function secret — it must never be committed.
+# Losing it is not fatal but is not free either: generating a new pair
+# invalidates every existing subscription, and subscribed browsers go silent
+# without an error anywhere. Keep a copy somewhere you will still have it.
+.vapid.json
+
+# The shared secret pg_cron sends to the notify function. Without it the
+# function is a public endpoint anyone can fire.
+.notify-secret.txt
+
+
+# Supabase CLI scratch state (which project ref is linked, etc.)
+supabase/.temp
