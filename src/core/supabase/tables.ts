@@ -13,6 +13,8 @@ export const Table = {
   profiles: 'profiles',
   doctorSecretaries: 'doctor_secretaries',
   secretaryInvites: 'secretary_invites',
+  notificationPreferences: 'notification_preferences',
+  pushSubscriptions: 'push_subscriptions',
 } as const;
 
 export type TableName = (typeof Table)[keyof typeof Table];

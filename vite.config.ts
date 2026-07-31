@@ -65,6 +65,22 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        /*
+          The `notificationclick` handler, pulled into the generated worker.
+
+          A notification is shown by `registration.showNotification()` from the
+          page, but the click arrives at the *worker* — and the generated one has
+          no opinion about it, so by default clicking a notification does nothing
+          but dismiss it. `importScripts` is the small way in: the alternative,
+          `injectManifest`, hands over the entire worker (precache, routing,
+          skipWaiting, the lot) so that one listener can be added to it.
+        */
+        importScripts: ['/sw-notifications.js'],
+        // ...and kept out of the precache, which `globPatterns` above would
+        // otherwise sweep it into. It is already fetched by the worker as part
+        // of installing itself; precaching it as well stores a second copy that
+        // nothing ever serves.
+        globIgnores: ['sw-notifications.js'],
         // A deep link fetched offline has no server to rewrite it, so the
         // worker plays the role Firebase Hosting plays online: serve the shell
         // and let the router read the URL.

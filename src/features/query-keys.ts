@@ -52,4 +52,31 @@ export const queryKeys = {
   secretaries: {
     all: (doctorId: string) => ['secretaries', doctorId] as const,
   },
+  notifications: {
+    /**
+     * Whether *this browser* is registered to receive push.
+     *
+     * Not server state at all — the answer comes from `pushManager`, and the
+     * browser is the authority on it. It is cached here anyway because it is
+     * async state with the same loading and invalidation needs as a query, and
+     * because a mutation elsewhere (subscribing) has to be able to name it. The
+     * `userId` is in the key so signing in as somebody else does not inherit the
+     * previous user's answer.
+     */
+    pushRegistration: (userId: string) => ['push-registration', userId] as const,
+    /**
+     * The one key in this file with no `ownerId`, and on purpose.
+     *
+     * Rule 1 above says everything the query depends on goes in the key — and
+     * this query does not depend on the active doctor. Notification preferences
+     * belong to the *person signed in*, so a secretary linked to three doctors
+     * has one set of them; keying by owner would refetch the same row under
+     * three names and, worse, imply she can be reachable differently depending
+     * on whose agenda she happens to be looking at.
+     *
+     * If you are here to "fix" the missing `ownerId`: this is the rule working,
+     * not an omission.
+     */
+    preferences: (userId: string) => ['notification-preferences', userId] as const,
+  },
 } as const;

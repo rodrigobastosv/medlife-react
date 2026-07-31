@@ -1,0 +1,16 @@
+{
+  "//": "Import map for the Edge Functions. Versions are pinned rather than floating: a function is deployed once and then runs unattended for months, so 'whatever is latest at deploy time' would make two deploys of the same commit different programs.",
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.111.0",
+    "@negrel/webpush": "jsr:@negrel/webpush@0.5.0"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
