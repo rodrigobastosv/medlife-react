@@ -17,6 +17,8 @@ import {
   useSavePatientMutation,
 } from '@/features/patients/use-patients';
 import { BackLink } from '@/features/navigation/back-link';
+import { UnsavedChangesDialog } from '@/features/navigation/unsaved-changes-dialog';
+import { useUnsavedChangesGuard } from '@/features/navigation/use-unsaved-changes-guard';
 import { Button } from '@/design-system/components/button';
 import { buttonClasses } from '@/design-system/components/button-classes';
 import { Card } from '@/design-system/components/card';
@@ -87,7 +89,7 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<PatientForm>({ resolver: zodResolver(schema), defaultValues: initial });
 
   /**
@@ -108,10 +110,18 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
   // the CPF field unusable on every edit.
   const duplicate = cpfMatch !== null && cpfMatch.id !== patientId ? cpfMatch : null;
 
+  // The same guard the appointment form uses: a patient's address and billing
+  // details are as tedious to retype as a consultation, and the ways of losing
+  // them are identical.
+  const unsavedChanges = useUnsavedChangesGuard(isDirty);
+
   const onSubmit = handleSubmit((values) => {
     saveMutation.mutate(toDraft(values), {
       onSuccess: (patient) => {
         showToast({ tone: 'success', message: 'Paciente salvo' });
+        // Before the redirect: the form is still dirty, so otherwise the guard
+        // would challenge the app's own navigation away from a saved record.
+        unsavedChanges.allowNavigation();
         void navigate(routes.patient(patient.id), { replace: true });
       },
       onError: (error) => showToast({ tone: 'error', message: messageOf(error) }),
@@ -220,6 +230,8 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
           </Button>
         </div>
       </form>
+
+      <UnsavedChangesDialog guard={unsavedChanges} />
     </Page>
   );
 }

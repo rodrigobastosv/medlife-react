@@ -129,11 +129,22 @@ export const test = base.extend<{ supabase: SupabaseStub }>({
 
         // Echoed back so `.select().single()` after an insert or upsert resolves
         // rather than hanging the mutation forever.
+        //
+        // With the columns the *database* fills in put back first. PostgREST
+        // answers a write with the row as stored, which always carries its
+        // primary key and `created_at`; echoing only what the app sent hands the
+        // mapper a row with neither, and `fromDateColumn(undefined)` throws — so
+        // a perfectly good save would fail here for a reason that exists nowhere
+        // but in the stub. Defaults lead, so anything actually sent still wins.
         const echoed = Array.isArray(body) ? body[0] : body;
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(echoed ?? {}),
+          body: JSON.stringify({
+            id: `stub-${table}-id`,
+            created_at: new Date().toISOString(),
+            ...(echoed as Record<string, unknown> | null),
+          }),
         });
         return;
       }
