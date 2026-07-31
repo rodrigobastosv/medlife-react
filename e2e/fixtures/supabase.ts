@@ -1,4 +1,4 @@
-import { expect, test as base, type Page, type Route } from '@playwright/test';
+import { expect, test as base, type BrowserContext, type Page, type Route } from '@playwright/test';
 
 /**
  * A Supabase that never leaves the browser.
@@ -73,7 +73,12 @@ export const test = base.extend<{ supabase: SupabaseStub }>({
   // rules-of-hooks reads a bare `use(...)` call as React 19's `use` hook and
   // fails the lint. The name is ours to choose — Playwright passes it
   // positionally — so renaming it is a real fix rather than a suppression.
-  supabase: async ({ page }: { page: Page }, provide) => {
+  //
+  // Routing happens on the *context* rather than on the page. Identical for the
+  // single page almost every test drives, but a link with `target="_blank"`
+  // opens a second one, and a `page.route` handler does not follow it — the new
+  // tab would be the only thing in the suite talking to a real host.
+  supabase: async ({ context, page }: { context: BrowserContext; page: Page }, provide) => {
     const stub: SupabaseStub = {
       tables: {},
       writes: [],
@@ -82,7 +87,7 @@ export const test = base.extend<{ supabase: SupabaseStub }>({
       },
     };
 
-    await page.route('**/auth/v1/**', async (route: Route) => {
+    await context.route('**/auth/v1/**', async (route: Route) => {
       const url = route.request().url();
 
       // Sign-out has to answer 2xx or the client keeps the session and the app
@@ -113,7 +118,7 @@ export const test = base.extend<{ supabase: SupabaseStub }>({
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     });
 
-    await page.route('**/rest/v1/**', async (route: Route) => {
+    await context.route('**/rest/v1/**', async (route: Route) => {
       const request = route.request();
       const table = tableOf(request.url());
       const method = request.method();
