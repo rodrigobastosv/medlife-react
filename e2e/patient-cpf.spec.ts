@@ -67,8 +67,25 @@ test('a CPF already in the register offers the existing patient', async ({ page,
 
   // The way out of the situation, which is the whole point: the record is
   // offered rather than the save refused.
+  //
+  // In a new tab, and this test is the reason that is not a detail. The notice
+  // cannot appear until a CPF has been typed, so the form behind it is always
+  // dirty — and a same-tab link therefore always lands on the unsaved-changes
+  // dialog, asking whether to throw away the form as the price of looking at
+  // the record the app itself just suggested.
+  const opened = page.waitForEvent('popup');
   await page.getByRole('link', { name: 'Abrir cadastro' }).click();
-  await expect(page).toHaveURL(/\/patients\/p-1$/);
+
+  const record = await opened;
+  await expect(record).toHaveURL(/\/patients\/p-1$/);
+  await expect(record.getByRole('heading', { name: 'Maria Silva' })).toBeVisible();
+
+  // And the form is untouched: nothing was discarded, nothing was asked.
+  // `toBeHidden`, not `toHaveCount(0)` — the guard's `<dialog>` is in the DOM of
+  // every form whether or not it is open, and this test stays on the page rather
+  // than leaving it.
+  await expect(page.getByText('Alterações não salvas')).toBeHidden();
+  await expect(cpfField(page)).toHaveValue('12345678901');
 });
 
 test('a CPF nobody holds is not accused', async ({ page, supabase }) => {

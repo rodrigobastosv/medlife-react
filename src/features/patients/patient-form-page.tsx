@@ -184,13 +184,32 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
                 className="bg-warning-container text-on-warning-container rounded-m flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
               >
                 <span>Já existe um paciente com esse CPF: {duplicate.fullName}</span>
-                {/* A link rather than a button: opening a record in a new tab
-                    is exactly what someone comparing the two will want.
-                    `border-current` and `text-inherit` because the outline
-                    variant's teal is legible on a surface, and this one is the
-                    warning container. */}
+                {/* A new tab, and not merely because comparing the two records
+                    side by side is what someone in this situation is doing.
+
+                    In the same tab this link is unusable. The notice only
+                    appears after a CPF has been typed, so the form is always
+                    dirty by the time it is on screen, and the unsaved-changes
+                    guard therefore always interrupts — offering to discard the
+                    half-filled form as the price of looking at the record the
+                    app itself just suggested. Opening a new document is not a
+                    router navigation, so there is nothing to block and nothing
+                    to lose: the form is still there, still filled in, when the
+                    other tab has answered the question.
+
+                    `target` on a `<Link>` is passed through to the anchor, and
+                    with it React Router does not intercept the click at all.
+                    `rel` is belt and braces on a same-origin URL, but it is the
+                    habit worth keeping. `border-current` and `text-inherit`
+                    because the outline variant's teal is legible on a surface,
+                    and this one is the warning container. */}
                 <Link
                   to={routes.patient(duplicate.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  // Said out loud, because a link that opens elsewhere without
+                  // warning is disorienting to anyone who cannot see it happen.
+                  aria-label={`Abrir cadastro de ${duplicate.fullName} em nova aba`}
                   className={buttonClasses({
                     variant: 'outline',
                     size: 'sm',
