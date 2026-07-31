@@ -39,6 +39,13 @@ export const formatDayMonth = (date: Date): string => format(date, 'dd/MM', { lo
 export const formatMonthYear = (date: Date): string =>
   capitalize(format(date, "MMMM 'de' yyyy", { locale: ptBR }));
 
+/**
+ * "julho" — the month on its own, in the lowercase form pt-BR uses inside a
+ * sentence ("Aniversariantes de julho"). Capitalise at the call site on the rare
+ * occasion it starts one.
+ */
+export const formatMonthName = (date: Date): string => format(date, 'MMMM', { locale: ptBR });
+
 /** "jul" — short month, no trailing dot. */
 export const formatMonthShort = (date: Date): string =>
   format(date, 'MMM', { locale: ptBR }).replace('.', '');
