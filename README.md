@@ -168,8 +168,13 @@ order:
 - `006_web_push.sql` — `push_subscriptions` and `notification_deliveries`, so the
   server can reach a closed app. See [Notifications](#notifications) for the rest
   of that setup, which also needs VAPID keys and a cron job.
+- `007_patients_unique_cpf.sql` — one CPF per patient inside each doctor's
+  register. **Run the audit query in its header first**: `create unique index`
+  fails if duplicates already exist, and which of two split records is the good
+  one is a question for whoever attends the patient, not for the schema. The file
+  says what to do with whatever the query returns.
 
-Both are additive, precisely so the Flutter app keeps working untouched. Because
+They are all additive, precisely so the Flutter app keeps working untouched. Because
 the database is shared, **any change here has to be safe for that app as well**:
 converting `scheduled_date` to `timestamptz` would have silently broken its
 date-range queries, which is why it was not done.

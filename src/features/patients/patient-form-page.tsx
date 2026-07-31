@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import { useToast } from '@/app/providers/toast-context';
@@ -8,10 +9,16 @@ import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
 import { fromDateColumn, toDateColumn } from '@/core/format';
 import { patientToDraft, type PatientDraft } from '@/domain/patients/patient';
+import { cpfDigits } from '@/domain/patients/patient-cpf';
 import { PATIENT_ORIGINS, patientOriginLabel } from '@/domain/patients/patient-origin';
-import { usePatientQuery, useSavePatientMutation } from '@/features/patients/use-patients';
+import {
+  usePatientByCpfQuery,
+  usePatientQuery,
+  useSavePatientMutation,
+} from '@/features/patients/use-patients';
 import { BackLink } from '@/features/navigation/back-link';
 import { Button } from '@/design-system/components/button';
+import { buttonClasses } from '@/design-system/components/button-classes';
 import { Card } from '@/design-system/components/card';
 import { SelectField, TextAreaField, TextField } from '@/design-system/components/form-fields';
 import { Page, PageHeader } from '@/design-system/components/page';
@@ -83,6 +90,24 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
     formState: { errors },
   } = useForm<PatientForm>({ resolver: zodResolver(schema), defaultValues: initial });
 
+  /**
+   * The CPF the register has been asked about, set when the field is left.
+   *
+   * On blur rather than on change, because a CPF is only meaningful once it is
+   * whole and a request per keystroke would ask eleven questions to get one
+   * answer. It starts empty even when editing: the patient's own CPF is already
+   * in the field, and looking it up on mount would spend a request to discover
+   * that they are themselves.
+   */
+  const [checkedCpf, setCheckedCpf] = useState('');
+  const cpfField = register('cpf');
+  const cpfMatch = usePatientByCpfQuery(checkedCpf).data ?? null;
+
+  // Editing a patient must not accuse them of being their own duplicate — the
+  // match found *is* the record being edited, and warning about it would make
+  // the CPF field unusable on every edit.
+  const duplicate = cpfMatch !== null && cpfMatch.id !== patientId ? cpfMatch : null;
+
   const onSubmit = handleSubmit((values) => {
     saveMutation.mutate(toDraft(values), {
       onSuccess: (patient) => {
@@ -118,7 +143,55 @@ function PatientForm({ patientId, initial }: { patientId: string | null; initial
             }))}
             {...register('origin')}
           />
-          <TextField label="CPF" inputMode="numeric" {...register('cpf')} />
+          {/* The field and its answer are one cell, so the notice appears under
+              the CPF it is about instead of at the bottom of the card. */}
+          <div className="flex flex-col gap-2">
+            <TextField
+              label="CPF"
+              inputMode="numeric"
+              {...cpfField}
+              onBlur={(event) => {
+                // react-hook-form's own `onBlur` is what marks the field touched
+                // and runs its validation; overriding the prop without calling it
+                // would quietly disable both.
+                void cpfField.onBlur(event);
+                setCheckedCpf(cpfDigits(event.target.value));
+              }}
+            />
+
+            {duplicate !== null && (
+              // A notice, not a validation error. The save is still allowed:
+              // refusing it would leave whoever is at the desk with a filled
+              // form, a red field and nowhere to go — and the case where the
+              // duplicate is genuinely a different person (a typo in the other
+              // record) would be unresolvable from here. Offering the existing
+              // record is the useful half; the unique index is what makes the
+              // rule true.
+              <div
+                // Announced when it appears — it shows up after the field has
+                // been left, so nobody is looking at it.
+                role="status"
+                className="bg-warning-container text-on-warning-container rounded-m flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
+              >
+                <span>Já existe um paciente com esse CPF: {duplicate.fullName}</span>
+                {/* A link rather than a button: opening a record in a new tab
+                    is exactly what someone comparing the two will want.
+                    `border-current` and `text-inherit` because the outline
+                    variant's teal is legible on a surface, and this one is the
+                    warning container. */}
+                <Link
+                  to={routes.patient(duplicate.id)}
+                  className={buttonClasses({
+                    variant: 'outline',
+                    size: 'sm',
+                    className: 'hover:bg-on-warning-container/10 border-current text-inherit',
+                  })}
+                >
+                  Abrir cadastro
+                </Link>
+              </div>
+            )}
+          </div>
           <TextField label="Telefone" type="tel" inputMode="tel" {...register('phone')} />
           <TextField label="Endereço" containerClassName="sm:col-span-2" {...register('address')} />
         </Card>

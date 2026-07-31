@@ -7,9 +7,11 @@ import {
   fetchPatient,
   fetchPatients,
   fetchPatientsCount,
+  findPatientByCpf,
   updatePatient,
 } from '@/data/patients-repository';
 import type { PatientDraft } from '@/domain/patients/patient';
+import { cpfDigits, isCompleteCpf } from '@/domain/patients/patient-cpf';
 import { queryKeys } from '@/features/query-keys';
 
 /**
@@ -49,6 +51,26 @@ export function usePatientQuery(patientId: string) {
   return useQuery({
     queryKey: queryKeys.patients.detail(ownerId, patientId),
     queryFn: () => fetchPatient(ownerId, patientId),
+  });
+}
+
+/**
+ * Whether some patient already holds this CPF.
+ *
+ * A query rather than a call in an event handler, which is what makes it safe
+ * to hang off a blur: going back to a field and leaving it again is a cache hit,
+ * not a second request, and the answer is invalidated by any patient save. The
+ * `enabled` gate is why an incomplete CPF costs nothing at all — the caller can
+ * hand over whatever is in the field.
+ */
+export function usePatientByCpfQuery(cpf: string) {
+  const { ownerId } = useDataScope();
+  const digits = cpfDigits(cpf);
+
+  return useQuery({
+    queryKey: queryKeys.patients.byCpf(ownerId, digits),
+    queryFn: () => findPatientByCpf(ownerId, digits),
+    enabled: isCompleteCpf(digits),
   });
 }
 

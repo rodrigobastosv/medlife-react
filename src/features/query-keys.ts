@@ -27,6 +27,15 @@ export const queryKeys = {
     all: (ownerId: string) => ['patients', ownerId] as const,
     detail: (ownerId: string, patientId: string) => ['patients', ownerId, patientId] as const,
     count: (ownerId: string) => ['patients', ownerId, 'count'] as const,
+    /**
+     * "Is this CPF already taken?", keyed by the digits rather than by what was
+     * typed — "123.456.789-01" and "12345678901" are one question, and keying
+     * by the raw text would ask it twice and cache two answers to it.
+     *
+     * Under the `patients` prefix on purpose: saving a patient invalidates the
+     * prefix, so the CPF just consumed stops being reported as free.
+     */
+    byCpf: (ownerId: string, cpfDigits: string) => ['patients', ownerId, 'cpf', cpfDigits] as const,
   },
   appointments: {
     /** The root every appointment query hangs off — invalidate this after a write. */

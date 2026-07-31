@@ -1,0 +1,66 @@
+-- CPF único por médico.
+--
+-- Hoje `patients.cpf` é um `text` nulável sem nenhuma restrição, e o mesmo
+-- paciente pode ser cadastrado duas vezes sem que nada dê errado: os dois
+-- registros são plausíveis, ninguém vê erro, e o histórico da pessoa fica
+-- partido ao meio. O problema só aparece meses depois ("por que essa paciente
+-- só tem duas consultas?"), quando juntar as duas fichas já é trabalho manual
+-- num banco em produção.
+--
+-- =========================================================
+-- ANTES DE APLICAR: RODE A AUDITORIA
+-- =========================================================
+-- `create unique index` **falha** se já existirem duplicatas — e falhar é o
+-- comportamento certo, porque o banco não tem como escolher qual das duas
+-- fichas é a boa. Rode isto primeiro, no SQL editor do projeto, e reconcilie o
+-- que aparecer antes de aplicar a migration:
+--
+--   select owner_id, cpf, count(*) as fichas, array_agg(id) as ids
+--     from public.patients
+--    where cpf is not null
+--    group by owner_id, cpf
+--   having count(*) > 1
+--    order by fichas desc;
+--
+-- Zero linhas = pode aplicar. Qualquer linha = decida qual `id` fica, mova as
+-- consultas da outra ficha (`update public.appointments set patient_id = <fica>
+-- where patient_id = <sai>`) e só então apague a que sai. Nenhum desses passos
+-- é automatizável aqui: qual ficha tem os dados certos é uma pergunta para
+-- quem atende, não para o schema.
+--
+-- =========================================================
+-- POR QUE ESTE ÍNDICE, E NÃO OUTRO
+-- =========================================================
+-- **Parcial** (`where cpf is not null`) porque o CPF é opcional. Um índice
+-- único comum já permitiria vários nulos no Postgres, mas o predicado deixa a
+-- intenção escrita e ainda tira do índice as fichas sem CPF, que são a maioria
+-- das antigas.
+--
+-- **Por `owner_id`** porque dois médicos podem legitimamente atender a mesma
+-- pessoa, e cada um tem a sua ficha dela. A unicidade é dentro do cadastro de
+-- um médico, nunca global — global quebraria o app Flutter (`../medlife`), que
+-- escreve nesta mesma tabela para todas as contas.
+--
+-- **Sobre o texto como está gravado**, e não sobre os dígitos. O índice pega
+-- "12345678901" gravado duas vezes, mas não "12345678901" contra
+-- "123.456.789-01": a coluna guarda o CPF como foi digitado, nos dois apps.
+-- Um índice sobre `regexp_replace(cpf, '\D', '', 'g')` pegaria também as
+-- variações de formatação — e foi considerado —, mas ele exige que a
+-- reconciliação acima seja feita sob a mesma expressão antes de existir, o que
+-- transforma uma migration aditiva em um bloqueio maior num banco vivo. O lado
+-- do app cobre a diferença no momento em que ela nasce: o formulário procura o
+-- CPF em ambas as grafias antes de salvar (`domain/patients/patient-cpf.ts`).
+-- Normalizar a coluna inteira é uma decisão de formato de dado que também é do
+-- app Flutter, e por isso não é tomada aqui.
+--
+-- Sem `concurrently`: as migrations rodam em transação e `create index
+-- concurrently` não pode. A tabela é pequena (um cadastro de consultório), o
+-- lock de escrita dura o tempo do índice, e o app Flutter no máximo vê uma
+-- escrita esperar. Se um dia essa tabela crescer, o caminho é rodar o
+-- `concurrently` à mão, fora daqui.
+create unique index if not exists patients_owner_cpf_key
+  on public.patients (owner_id, cpf)
+  where cpf is not null;
+
+comment on index public.patients_owner_cpf_key is
+  'Um CPF por paciente dentro do cadastro de cada médico. Parcial: CPF é opcional e vários nulos continuam válidos.';
