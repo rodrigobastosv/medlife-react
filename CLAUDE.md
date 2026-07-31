@@ -103,6 +103,15 @@ once in the route table and cannot be forgotten on a new screen. `RequireAuth`
 has three states, not two; redirecting during `loading` bounces signed-in users
 to sign-in on every reload.
 
+**The render-error boundary sits _below_ the shell, not on it.** An
+`errorElement` replaces the element of the route that declares it, so putting one
+on the `AppShell` route would take the sidebar down with the crashed page. It is
+declared on a pathless layout route inside the shell instead
+(`app/routing/route-error-page.tsx`), which is what keeps the navigation on
+screen. It catches render, loader and action errors only — a failure inside an
+event handler or an async callback is still an `AppError` shown as a toast, and
+that split is deliberate.
+
 **The service worker precaches the shell and nothing from Supabase.** Runtime
 caching in `vite.config.ts` covers Google Fonts only — a cached API response is a
 copy of a patient's data that outlives the sign-out meant to remove it. Updates
