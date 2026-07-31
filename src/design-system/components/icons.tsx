@@ -162,6 +162,12 @@ export const CloseIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const CloudOffIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m792-56-58-56q-11 5-23 8.5t-25 3.5H260q-91 0-155.5-63T40-320q0-78 47-139t123-77q3-8 6-15.5t8-15.5L56-792l56-56 736 736-56 56ZM260-200h400L285-575q-2 12-3.5 23.5T280-528h-20q-58 0-99 41t-41 99q0 58 41 99t99 41Zm586-27-58-58q12-14 22-33t10-42q0-58-41-99t-99-41h-80v-80q0-83-58.5-141.5T400-780q-30 0-58 8t-52 24l-58-58q37-29 82-44.5t86-15.5q116 0 198 81.5T680-587q76 14 128 73.5T860-360q0 38-13.5 71.5T846-227Z" />
+  </Icon>
+);
+
 /** The brand mark: a leaf-shaped drop with an ECG line, matching the Flutter logo. */
 export const Logo = ({ className = 'size-8' }: { className?: string }) => (
   <svg viewBox="0 0 48 48" className={className} aria-hidden focusable="false">
