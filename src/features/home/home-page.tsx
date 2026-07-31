@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
+import { dateOnly } from '@/core/format';
 import type { Appointment } from '@/domain/appointments/appointment';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import {
@@ -10,7 +11,8 @@ import {
   useTodayAppointmentsQuery,
   useUpcomingReturnsQuery,
 } from '@/features/appointments/use-appointments';
-import { usePatientsCountQuery } from '@/features/patients/use-patients';
+import { BirthdaysCard } from '@/features/patients/birthdays-card';
+import { usePatientsCountQuery, usePatientsQuery } from '@/features/patients/use-patients';
 import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
 import {
@@ -21,15 +23,15 @@ import {
   RepeatIcon,
 } from '@/design-system/components/icons';
 import { Page, PageHeader, Section } from '@/design-system/components/page';
-import { SkeletonList } from '@/design-system/components/skeleton';
+import { Skeleton, SkeletonList } from '@/design-system/components/skeleton';
 
 /**
  * The landing screen: how many patients there are, who needs to be called back,
- * and which returns are coming up.
+ * which returns are coming up, and who has a birthday this month.
  *
- * Three independent queries rather than one combined read. React runs them in
+ * Independent queries rather than one combined read. React runs them in
  * parallel, each renders as soon as *it* resolves, and a failure in one leaves
- * the other two on screen — where a single "load everything" call would make the
+ * the others on screen — where a single "load everything" call would make the
  * slowest read the speed of the page and any one failure the failure of all of
  * it.
  */
@@ -38,6 +40,19 @@ export function HomePage() {
   const today = useTodayAppointmentsQuery();
   const recalls = usePendingRecallsQuery();
   const returns = useUpcomingReturnsQuery();
+
+  // The birthday card needs the patients themselves, not a count. That is the
+  // same cache entry Pacientes fills, so moving between the two screens costs
+  // one request rather than two — and there is no cheaper server-side answer to
+  // ask for: "birthday this month" is `extract(month from birth_date)`, which is
+  // a computation PostgREST cannot filter on without a generated column.
+  const patients = usePatientsQuery();
+
+  // Read once, at mount, and handed down. Every date on the card — the month in
+  // its title, the month it filters by, and the "hoje" badge — has to come from
+  // the same instant, or a session left open across midnight shows a heading
+  // that contradicts the list beneath it.
+  const [currentDay] = useState(() => dateOnly(new Date()));
 
   return (
     <Page>
@@ -107,6 +122,17 @@ export function HomePage() {
             emptyIcon={<RepeatIcon />}
           />
         </Section>
+
+        {/* Last on the page, and deliberately: a birthday is a reason to call
+            someone, not something the day depends on. It is skipped entirely
+            while the patients load and on error — the three lists above already
+            carry the screen, and a fourth failure message about a courtesy list
+            would be the loudest thing on it. */}
+        {patients.isPending ? (
+          <Skeleton className="h-32 w-full rounded-l" />
+        ) : patients.isError ? null : (
+          <BirthdaysCard patients={patients.data} today={currentDay} />
+        )}
       </div>
     </Page>
   );

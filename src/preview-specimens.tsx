@@ -20,7 +20,9 @@ import {
   appointmentStatusLabel,
   appointmentTypeLabel,
 } from '@/domain/appointments/appointment-enums';
+import type { Patient } from '@/domain/patients/patient';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
+import { BirthdaysCard } from '@/features/patients/birthdays-card';
 import { Button } from '@/design-system/components/button';
 import { Card, CardTitle } from '@/design-system/components/card';
 import { SelectField, TextAreaField, TextField } from '@/design-system/components/form-fields';
@@ -91,6 +93,42 @@ const APPOINTMENTS: readonly Appointment[] = [
     // Sem autor, como toda linha anterior à coluna `created_by`.
     createdBy: null,
   },
+];
+
+/**
+ * Pacientes falsos para o card de aniversariantes.
+ *
+ * O mês do espécime é fevereiro de 2026, que **não** é bissexto, e um dos
+ * pacientes nasceu em 29/02: é a decisão registrada em `birthdaysInMonth` — o
+ * aniversário fica em fevereiro mesmo no ano sem dia 29 — e é o caso que só dá
+ * para conferir olhando. O dia 3 é "hoje" aqui, para o destaque aparecer.
+ */
+const BIRTHDAY_MONTH = new Date(2026, 1, 3);
+
+const fakePatient = (id: string, fullName: string, birthDate: Date | null): Patient => ({
+  id,
+  fullName,
+  origin: 'other',
+  birthDate,
+  cpf: null,
+  phone: null,
+  address: null,
+  invoiceName: null,
+  invoiceCpf: null,
+  notes: null,
+  createdAt: null,
+});
+
+const PATIENTS: readonly Patient[] = [
+  // 1952 é bissexto, e tem de ser: `new Date(1949, 1, 29)` vira 1º de março
+  // caladamente, e o espécime passaria a mostrar o contrário do que promete. Na
+  // base isso não acontece — uma coluna `date` não aceita 29/02 de ano comum.
+  fakePatient('p1', 'Bento Carvalho Nogueira', new Date(1952, 1, 29)),
+  fakePatient('p2', 'Ana Beatriz Cordeiro', new Date(1948, 1, 3)),
+  fakePatient('p3', 'Ângela Prado', new Date(1955, 1, 1)),
+  fakePatient('p4', 'Marina Albuquerque', new Date(1972, 6, 14)),
+  // Sem data de nascimento: fica fora da lista, mas conta no rodapé do card.
+  fakePatient('p5', 'Otávio Bandeira Filho', null),
 ];
 
 /** A linha de resumo do início, com a mesma estrutura da HomePage. */
@@ -206,6 +244,8 @@ export function Specimens() {
           <AppointmentTile key={appointment.id} appointment={appointment} showPatientName />
         ))}
       </Section>
+
+      <BirthdaysCard patients={PATIENTS} today={BIRTHDAY_MONTH} />
 
       <MoneyColumn />
 
