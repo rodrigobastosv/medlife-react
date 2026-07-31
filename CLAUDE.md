@@ -92,6 +92,15 @@ once in the route table and cannot be forgotten on a new screen. `RequireAuth`
 has three states, not two; redirecting during `loading` bounces signed-in users
 to sign-in on every reload.
 
+**The service worker precaches the shell and nothing from Supabase.** Runtime
+caching in `vite.config.ts` covers Google Fonts only — a cached API response is a
+copy of a patient's data that outlives the sign-out meant to remove it. Updates
+use `registerType: 'prompt'` (`app/pwa/pwa-update-prompt.tsx` asks) rather than
+`autoUpdate`, which would reload the page under a half-filled form. The worker is
+disabled in `npm run dev` because it fights HMR; `npm run build && npm run
+preview` is how you see it. Icons are generated from the SVG sources in
+`public/icons/` — the command is in the README.
+
 **Paths are never string literals.** `app/routing/routes.ts` exports builders
 (`routes.patient(id)`); `routePatterns` holds the `:param` forms for the router.
 The appointment form is addressed entirely by URL rather than via navigation

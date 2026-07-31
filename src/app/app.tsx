@@ -4,6 +4,7 @@ import { QueryProvider } from '@/app/providers/query-provider';
 import { SessionProvider } from '@/app/providers/session-provider';
 import { ThemeProvider } from '@/app/providers/theme-provider';
 import { ToastProvider } from '@/app/providers/toast-provider';
+import { PwaUpdatePrompt } from '@/app/pwa/pwa-update-prompt';
 import { router } from '@/app/routing/router';
 
 /**
@@ -22,6 +23,11 @@ export function App() {
     <ThemeProvider>
       <QueryProvider>
         <ToastProvider>
+          {/* Outside `SessionProvider` and outside the router: a new version is
+              worth offering on the sign-in screen too, and the prompt must not
+              be unmounted by whatever route happens to be showing. It is inside
+              `ToastProvider` because it announces "offline ready" through it. */}
+          <PwaUpdatePrompt />
           <SessionProvider>
             <RouterProvider router={router} />
           </SessionProvider>

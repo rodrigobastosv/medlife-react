@@ -42,7 +42,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           can see and nobody hears is not feedback at all. */}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4"
+        // The `max()` on the bottom padding is for the installed app: with
+        // `viewport-fit=cover` the page runs under the home indicator, and a
+        // flat `p-4` would put the toast's action button behind it. On anything
+        // without a safe area the inset is 0 and this is exactly `p-4`.
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
       >
         {toasts.map((toast) => (
           <div

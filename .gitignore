@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Service worker built by vite-plugin-pwa when devOptions.enabled is on
+dev-dist
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -102,6 +102,53 @@ from the **role**, never from the null.
 
 ---
 
+## PWA
+
+The app installs. On desktop Chrome that is the install button in the address
+bar; on Android it is the install banner; on iOS it is _Compartilhar → Adicionar
+à Tela de Início_, which ignores the manifest and reads the `apple-*` tags in
+`index.html` instead — that is why those are duplicated by hand there.
+
+`vite-plugin-pwa` generates `manifest.webmanifest` and a Workbox service worker
+at build time. Three decisions in `vite.config.ts` are worth knowing:
+
+- **Updates are offered, not applied.** `registerType: 'prompt'` — the new worker
+  waits and `PwaUpdatePrompt` asks. `autoUpdate` would swap the bundle under a
+  half-filled appointment form, and this app is used during consultations.
+  An open tab re-checks hourly, because the browser only checks on navigation and
+  a SPA left open all day never navigates.
+- **Supabase is never cached.** The runtime caching list covers the Google Fonts
+  stylesheet and font files and nothing else. A cached response is a copy of a
+  patient's data that outlives the sign-out meant to remove it, so everything
+  else goes to the network; TanStack Query already holds the in-memory copy.
+  What the worker precaches is the shell — the built assets and `index.html` —
+  which is what makes a deep link work offline, where there is no Firebase
+  rewrite to fall back on.
+- **The service worker is off in `npm run dev`**, or it fights HMR. Flip
+  `devOptions.enabled` to exercise the update prompt locally, then run
+  `npm run build && npm run preview` to see the real thing.
+
+Firebase serves `sw.js` and `manifest.webmanifest` with `Cache-Control:
+no-cache`. A cached `sw.js` is an app stuck on the old version — the browser
+decides whether an update exists by comparing that file byte for byte, so a stale
+copy from the CDN reads as "nothing new".
+
+The icons in `public/icons/` are generated from the two SVG sources beside them:
+
+```bash
+cd public/icons
+sips -s format png --resampleHeightWidth 192 192 icon.svg --out icon-192.png
+sips -s format png --resampleHeightWidth 512 512 icon.svg --out icon-512.png
+sips -s format png --resampleHeightWidth 512 512 icon-maskable.svg --out icon-maskable-512.png
+sips -s format png --resampleHeightWidth 180 180 icon.svg --out apple-touch-icon.png
+```
+
+`icon-maskable.svg` is not a copy of `icon.svg` at another size: Android crops an
+installed icon to the launcher's shape and only the central 80% survives, so the
+mark is drawn smaller inside the same plate.
+
+---
+
 ## Backend
 
 Shared with the Flutter app. If the database has not been set up yet, run the
