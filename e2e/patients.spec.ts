@@ -74,6 +74,38 @@ test('search also matches CPF and phone', async ({ page, supabase }) => {
   await expect(page.getByText('Otávio Bandeira')).toBeVisible();
 });
 
+/**
+ * The recall workflow ends in another app, so what matters is the *href*: a
+ * number that is one digit wrong, or missing its country code, fails silently
+ * after the tap and in a place this suite cannot follow it to. Asserting the
+ * attribute is asserting the whole handoff.
+ */
+test("a patient's record can be dialled and opened in WhatsApp", async ({ page, supabase }) => {
+  await supabase.signIn();
+  await page.goto('/patients/p-1');
+
+  await expect(
+    page.getByRole('link', { name: 'Ligar para José Antônio da Silva' }),
+  ).toHaveAttribute('href', 'tel:+5585999990000');
+  await expect(
+    page.getByRole('link', { name: 'Abrir conversa no WhatsApp com José Antônio da Silva' }),
+  ).toHaveAttribute('href', 'https://wa.me/5585999990000');
+});
+
+test('a patient with no phone gets no contact actions at all', async ({ page, supabase }) => {
+  supabase.tables.patients = [patient({ phone: null })];
+
+  await supabase.signIn();
+  await page.goto('/patients/p-1');
+
+  // Present, so the assertion below is about the buttons rather than about a
+  // page that never loaded.
+  await expect(page.getByRole('heading', { name: 'José Antônio da Silva' })).toBeVisible();
+  // Not "disabled": absent. A greyed-out button still reads as an action.
+  await expect(page.getByRole('link', { name: /Ligar para/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /WhatsApp/ })).toHaveCount(0);
+});
+
 test('a search that matches nothing is told apart from having no patients', async ({
   page,
   supabase,
