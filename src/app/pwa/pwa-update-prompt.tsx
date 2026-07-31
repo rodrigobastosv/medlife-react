@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 import { useToast } from '@/app/providers/toast-context';
+import { TopBanner } from '@/app/pwa/top-banner';
+import { useOnlineStatus } from '@/app/pwa/use-online-status';
 import { Button } from '@/design-system/components/button';
 
 /**
@@ -32,10 +34,13 @@ let isUpdateCheckScheduled = false;
  *
  * The banner sits at the top because the toast region owns the bottom of the
  * screen; two overlapping notifications is the failure mode of adding a second
- * one without looking at the first.
+ * one without looking at the first. That top slot is now shared with
+ * `OfflineBanner` and drawn by `TopBanner`, which is where the arrangement is
+ * described.
  */
 export function PwaUpdatePrompt() {
   const { showToast } = useToast();
+  const isOnline = useOnlineStatus();
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -61,34 +66,30 @@ export function PwaUpdatePrompt() {
     setOfflineReady(false);
   }, [offlineReady, setOfflineReady, showToast]);
 
-  if (!needRefresh) return null;
+  // Yields the top slot to `OfflineBanner`, which is the only thing that
+  // explains why the screen looks wrong. Nothing is lost by waiting: `needRefresh`
+  // is latched by the hook, so the offer reappears the moment the connection
+  // does — and it is a better offer then, since the reload it performs is how a
+  // worker that never finished installing gets a second chance at its assets.
+  if (!needRefresh || !isOnline) return null;
 
   return (
-    <div
-      // `polite`, not `assertive`: a pending update is never urgent enough to
-      // interrupt whatever a screen reader is in the middle of.
-      aria-live="polite"
-      // The `max()` keeps the banner below the notch when the app is installed
-      // and painting under it; without a safe area it is exactly `p-4`.
-      className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]"
-    >
-      <div className="border-outline bg-surface-container-high text-on-surface pointer-events-auto flex w-full max-w-[460px] flex-wrap items-center gap-3 rounded-l border px-4 py-3 text-sm shadow-lg">
-        <span className="min-w-40 flex-1">Uma nova versão do MedLife está disponível.</span>
-        <Button
-          size="sm"
-          onClick={() => {
-            // This reloads the page: the waiting worker takes control and the
-            // new bundle is what comes back. Nothing to do afterwards, which is
-            // why the result is deliberately dropped.
-            void updateServiceWorker();
-          }}
-        >
-          Atualizar
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)}>
-          Agora não
-        </Button>
-      </div>
-    </div>
+    <TopBanner>
+      <span className="min-w-40 flex-1">Uma nova versão do MedLife está disponível.</span>
+      <Button
+        size="sm"
+        onClick={() => {
+          // This reloads the page: the waiting worker takes control and the
+          // new bundle is what comes back. Nothing to do afterwards, which is
+          // why the result is deliberately dropped.
+          void updateServiceWorker();
+        }}
+      >
+        Atualizar
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)}>
+        Agora não
+      </Button>
+    </TopBanner>
   );
 }

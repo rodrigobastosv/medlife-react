@@ -34,6 +34,17 @@ export function QueryProvider({ children }: { children: ReactNode }) {
             // one retry.
             retry: 1,
             refetchOnWindowFocus: false,
+            // The default, `'online'`, refuses to fire a query at all while the
+            // browser reports no network: the query sits in `fetchStatus:
+            // 'paused'` and every screen spins forever, which reads as a hang
+            // rather than as an outage. `'offlineFirst'` lets the first attempt
+            // go out — `navigator.onLine` is optimistic enough that "offline"
+            // sometimes still has a service worker or a captive portal behind it
+            // — and only *pauses the retries*, so the failure surfaces as the
+            // error state the screens already know how to draw instead of
+            // burning the retry budget against a network that is known to be
+            // down. The banner is what turns that error into an explanation.
+            networkMode: 'offlineFirst',
           },
         },
       }),
