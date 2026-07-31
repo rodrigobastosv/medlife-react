@@ -1,0 +1,24 @@
+<!--
+  The same mark, drawn for `purpose: "maskable"`.
+
+  Android crops an installed icon to whatever shape the launcher uses — circle,
+  squircle, teardrop — and only the central 80% circle is guaranteed to survive.
+  So this is not a duplicate of `icon.svg` at another size: the plate is
+  identical, and the mark is scaled down to sit inside that safe zone. Shipping
+  only the `any` icon is what produces the clipped logo people recognise as a
+  badly packaged PWA.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0E7C86" />
+  <g transform="translate(112.64 112.64) scale(5.9733)">
+    <path d="M24 4c8 6 14 12.5 14 21a14 14 0 1 1-28 0c0-8.5 6-15 14-21Z" fill="#FFFFFF" />
+    <path
+      d="M14 27h6l3-6 4 11 3-5h4"
+      fill="none"
+      stroke="#0E7C86"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>

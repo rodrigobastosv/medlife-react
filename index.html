@@ -3,9 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` lets the page paint under the notch and the home
+      indicator once the app is installed and there is no browser chrome sitting
+      there instead. It is the fixed overlays that then have to keep clear of
+      them by hand — see the `env(safe-area-inset-*)` padding on the toast region
+      and on the update banner.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0E7C86" />
     <meta name="description" content="MedLife — acompanhamento de pacientes e consultas." />
+
+    <!--
+      iOS installs from the Share sheet and mostly ignores the web app manifest:
+      the icon, the title and the standalone flag all have to be repeated here as
+      Apple-prefixed tags, or "Adicionar à Tela de Início" produces a bookmark
+      that opens in Safari with a screenshot of the page as its icon.
+      `manifest.webmanifest` itself is injected into this file at build time by
+      vite-plugin-pwa, which is why there is no <link rel="manifest"> below.
+    -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MedLife" />
+    <!-- `default` (not `black-translucent`) so the status bar keeps its own
+         background instead of overlapping the app's header. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!--
       The theme is applied before React mounts. Without this the page paints in
