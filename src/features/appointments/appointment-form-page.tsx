@@ -56,6 +56,8 @@ const schema = z.object({
   status: z.enum(APPOINTMENT_STATUSES),
   nextReturnDate: z.string(),
   recallDate: z.string(),
+  followUpDate: z.string(),
+  followUpTime: z.string(),
   notes: z.string(),
   amount: z.string(),
   paymentMethod: z.string(),
@@ -239,7 +241,10 @@ function AppointmentFormView({
         </Card>
 
         <Card className="grid gap-4 sm:grid-cols-2">
-          <CardTitle className="sm:col-span-2">Acompanhamento</CardTitle>
+          {/* Renamed from "Acompanhamento", which is now the name of one of the
+              fields inside it. A card and a field with the same word would make
+              the hint text the only thing distinguishing them. */}
+          <CardTitle className="sm:col-span-2">Retornos e contatos</CardTitle>
           <TextField
             label="Retorno agendado"
             type="date"
@@ -249,8 +254,26 @@ function AppointmentFormView({
           <TextField
             label="Recall"
             type="date"
-            hint="Data para entrar em contato com o paciente."
+            // Says whose job it is. The two contact dates below and above each
+            // other are only telling apart by who acts on them, and a hint that
+            // said "entrar em contato com o paciente" would fit both.
+            hint="Data para a secretaria ligar e marcar a próxima consulta."
             {...register('recallDate')}
+          />
+          <TextField
+            label="Acompanhamento"
+            type="date"
+            hint="Data para você falar com o paciente e saber como ele está."
+            {...register('followUpDate')}
+          />
+          <TextField
+            label="Hora do acompanhamento"
+            type="time"
+            // Optional where `scheduledTime` is required, because "ligar na
+            // quinta" is a complete instruction and a form that demanded an hour
+            // would make people invent one.
+            hint="Opcional. Sem hora, o aviso chega no começo do dia."
+            {...register('followUpTime')}
           />
           <TextAreaField
             label="Observações"
@@ -373,6 +396,8 @@ function toFormValues(
       status: isFutureDay(scheduledFor) ? 'scheduled' : 'completed',
       nextReturnDate: '',
       recallDate: '',
+      followUpDate: '',
+      followUpTime: '',
       notes: '',
       amount: '',
       paymentMethod: '',
@@ -391,6 +416,8 @@ function toFormValues(
     nextReturnDate:
       appointment.nextReturnDate === null ? '' : toDateColumn(appointment.nextReturnDate),
     recallDate: appointment.recallDate === null ? '' : toDateColumn(appointment.recallDate),
+    followUpDate: appointment.followUpDate === null ? '' : toDateColumn(appointment.followUpDate),
+    followUpTime: appointment.followUpTime ?? '',
     notes: appointment.notes ?? '',
     amount: finance === null ? '' : String(finance.amount),
     paymentMethod: finance?.paymentMethod ?? '',
@@ -412,6 +439,12 @@ function toDraft(
     status: values.status,
     nextReturnDate: values.nextReturnDate === '' ? null : fromDateColumn(values.nextReturnDate),
     recallDate: values.recallDate === '' ? null : fromDateColumn(values.recallDate),
+    followUpDate: values.followUpDate === '' ? null : fromDateColumn(values.followUpDate),
+    // The hour is meaningless without the day, and `appointmentDraftToColumns`
+    // drops it anyway; resolving it to null here keeps the draft honest rather
+    // than relying on the mapper to tidy up after the form.
+    followUpTime:
+      values.followUpDate === '' || values.followUpTime === '' ? null : values.followUpTime,
     notes: values.notes,
     // Null, not a zeroed finance: a secretary's appointment is saved with no row
     // in `appointment_finances` at all, so the doctor can fill it in later

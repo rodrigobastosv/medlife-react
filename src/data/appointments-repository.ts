@@ -68,6 +68,31 @@ export async function fetchPendingRecalls(scope: Scope, asOf: Date): Promise<App
   return data.map(toAppointment);
 }
 
+/**
+ * Acompanhamentos whose day has arrived — the doctor's "call this patient"
+ * backlog, and a different queue from `fetchPendingRecalls`.
+ *
+ * Ordered by time within the day, with the timeless ones first: a follow-up
+ * recorded as "quinta" is due from the start of Thursday, so it belongs above
+ * the one set for 16:00 rather than after everything that named an hour. That is
+ * the same `nulls first` the partial index is built with, so the sort is read
+ * off the index rather than done afterwards.
+ */
+export async function fetchPendingFollowUps(scope: Scope, asOf: Date): Promise<Appointment[]> {
+  const { data, error } = await supabase
+    .from(Table.appointments)
+    .select(columnsWithPatient(scope))
+    .eq('owner_id', scope.ownerId)
+    .not('follow_up_date', 'is', null)
+    .lte('follow_up_date', toDateColumn(asOf))
+    .order('follow_up_date', { ascending: true })
+    .order('follow_up_time', { ascending: true, nullsFirst: true })
+    .overrideTypes<AppointmentRow[], { merge: false }>();
+
+  if (error !== null) throw new AppError('Não foi possível carregar os acompanhamentos', error);
+  return data.map(toAppointment);
+}
+
 export async function fetchUpcomingReturns(scope: Scope, from: Date): Promise<Appointment[]> {
   const { data, error } = await supabase
     .from(Table.appointments)

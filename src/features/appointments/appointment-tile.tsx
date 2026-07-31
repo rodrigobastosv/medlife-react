@@ -85,13 +85,25 @@ export function AppointmentTile({
           </div>
         )}
 
-        {(appointment.nextReturnDate !== null || appointment.recallDate !== null) && (
+        {(appointment.nextReturnDate !== null ||
+          appointment.recallDate !== null ||
+          appointment.followUpDate !== null) && (
           <div className="flex flex-wrap gap-2">
             {appointment.nextReturnDate !== null && (
               <Tag tone="primary">Retorno em {formatDate(appointment.nextReturnDate)}</Tag>
             )}
             {appointment.recallDate !== null && (
               <Tag tone="neutral">Recall em {formatDate(appointment.recallDate)}</Tag>
+            )}
+            {appointment.followUpDate !== null && (
+              // The hour is appended only when there is one, rather than shown
+              // as "00:00" or an em dash: a follow-up with just a day is a
+              // complete instruction, and padding it would invent a precision
+              // the doctor did not ask for.
+              <Tag tone="warning">
+                Acompanhamento em {formatDate(appointment.followUpDate)}
+                {appointment.followUpTime === null ? '' : ` às ${appointment.followUpTime}`}
+              </Tag>
             )}
           </div>
         )}

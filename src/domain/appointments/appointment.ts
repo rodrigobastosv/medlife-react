@@ -66,6 +66,24 @@ export interface Appointment {
   readonly patientPhone: string | null;
   readonly nextReturnDate: Date | null;
   readonly recallDate: Date | null;
+  /**
+   * When the **doctor** will contact the patient to ask how they are.
+   *
+   * Not a second name for `recallDate`, which is when the **secretary** calls to
+   * book the next consultation. The two are different people's work and produce
+   * different queues, so folding them together would mean asking "whose task is
+   * this?" at every point that reads one — and nothing on the row could answer.
+   */
+  readonly followUpDate: Date | null;
+  /**
+   * `HH:mm`, or `null` for a follow-up recorded with only a day.
+   *
+   * Unlike `scheduledTime`, this null is not merely historical: the form leaves
+   * the time optional, because "ligar para a Maria na quinta" is a complete
+   * thought. Absent means the start of the day, not midnight — see the
+   * `nulls first` ordering in `008_appointment_follow_up.sql`.
+   */
+  readonly followUpTime: string | null;
   readonly notes: string | null;
   /** When the row was inserted — what the "nova consulta" notification reads. */
   readonly createdAt: Date;
@@ -99,6 +117,9 @@ export interface AppointmentRow {
   status: string | null;
   next_return_date: string | null;
   recall_date: string | null;
+  /** Absent on rows written before the columns existed. */
+  follow_up_date?: string | null;
+  follow_up_time?: string | null;
   notes: string | null;
   created_at: string;
   /** Absent on rows written before the column existed. */
@@ -132,6 +153,11 @@ export function toAppointment(row: AppointmentRow): Appointment {
     patientPhone: row.patients?.phone ?? null,
     nextReturnDate: row.next_return_date === null ? null : fromDateColumn(row.next_return_date),
     recallDate: row.recall_date === null ? null : fromDateColumn(row.recall_date),
+    followUpDate:
+      row.follow_up_date === null || row.follow_up_date === undefined
+        ? null
+        : fromDateColumn(row.follow_up_date),
+    followUpTime: toTimeOfDay(row.follow_up_time),
     notes: row.notes,
     // Both come for free: every select in the repository is `*`, so these two
     // columns were already crossing the wire and being dropped on the floor.
@@ -191,6 +217,9 @@ export interface AppointmentDraft {
   finance: AppointmentFinance | null;
   nextReturnDate: Date | null;
   recallDate: Date | null;
+  followUpDate: Date | null;
+  /** `HH:mm`, or null — the form leaves the time optional. */
+  followUpTime: string | null;
   notes: string;
 }
 
@@ -205,6 +234,11 @@ export function appointmentDraftToColumns(draft: AppointmentDraft) {
     status: draft.status,
     next_return_date: draft.nextReturnDate === null ? null : toDateColumn(draft.nextReturnDate),
     recall_date: draft.recallDate === null ? null : toDateColumn(draft.recallDate),
+    follow_up_date: draft.followUpDate === null ? null : toDateColumn(draft.followUpDate),
+    // Cleared along with the date rather than kept: an hour with no day is not a
+    // moment, and leaving it behind would resurrect itself the next time someone
+    // set a date.
+    follow_up_time: draft.followUpDate === null ? null : draft.followUpTime,
     notes: draft.notes.trim() === '' ? null : draft.notes.trim(),
   };
 }

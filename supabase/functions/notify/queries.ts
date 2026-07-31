@@ -59,7 +59,8 @@ export async function fetchCandidates(db: SupabaseClient): Promise<Candidate[]> 
     .eq('push_enabled', true)
     .or(
       'daily_agenda_enabled.eq.true,recalls_enabled.eq.true,' +
-        'new_appointment_enabled.eq.true,upcoming_visit_enabled.eq.true',
+        'new_appointment_enabled.eq.true,upcoming_visit_enabled.eq.true,' +
+        'follow_ups_enabled.eq.true',
     );
 
   if (error !== null) throw new Error(`preferências: ${error.message}`);
@@ -122,6 +123,7 @@ export async function fetchCandidates(db: SupabaseClient): Promise<Candidate[]> 
           newAppointmentEnabled: row.new_appointment_enabled === true,
           upcomingVisitEnabled: row.upcoming_visit_enabled === true,
           upcomingLeadMinutes: (row.upcoming_lead_minutes as number | null) ?? 30,
+          followUpsEnabled: row.follow_ups_enabled === true,
         },
       },
     ];
@@ -146,11 +148,12 @@ const since = (windowMs: number): string => new Date(Date.now() - windowMs).toIS
 export interface AppointmentsByOwner {
   readonly onDay: ReadonlyMap<string, Appointment[]>;
   readonly recalls: ReadonlyMap<string, Appointment[]>;
+  readonly followUps: ReadonlyMap<string, Appointment[]>;
   readonly foreign: ReadonlyMap<string, Appointment[]>;
 }
 
 /**
- * All three appointment reads, for every owner in the run, in three queries.
+ * All four appointment reads, for every owner in the run, in four queries.
  *
  * `localDates` is the set of distinct "today"s across the candidates — normally
  * one, more only if users are in different timezones. Passing the set rather
@@ -163,10 +166,11 @@ export async function fetchAppointments(
   localDates: readonly string[],
 ): Promise<AppointmentsByOwner> {
   const columns =
-    'id, owner_id, patient_id, scheduled_date, scheduled_time, status, created_by, patients(full_name)';
+    'id, owner_id, patient_id, scheduled_date, scheduled_time, status, created_by, ' +
+    'follow_up_date, follow_up_time, patients(full_name)';
   const latestDate = [...localDates].sort().at(-1) ?? localDates[0]!;
 
-  const [onDayResult, recallsResult, foreignResult] = await Promise.all([
+  const [onDayResult, recallsResult, followUpsResult, foreignResult] = await Promise.all([
     db
       .from('appointments')
       .select(columns)
@@ -182,17 +186,24 @@ export async function fetchAppointments(
       .from('appointments')
       .select(columns)
       .in('owner_id', ownerIds)
+      .not('follow_up_date', 'is', null)
+      .lte('follow_up_date', latestDate),
+    db
+      .from('appointments')
+      .select(columns)
+      .in('owner_id', ownerIds)
       .not('created_by', 'is', null)
       .gt('created_at', since(NEW_APPOINTMENT_WINDOW_MS)),
   ]);
 
-  for (const result of [onDayResult, recallsResult, foreignResult]) {
+  for (const result of [onDayResult, recallsResult, followUpsResult, foreignResult]) {
     if (result.error !== null) throw new Error(`consultas: ${result.error.message}`);
   }
 
   return {
     onDay: groupByOwner(onDayResult.data ?? []),
     recalls: groupByOwner(recallsResult.data ?? []),
+    followUps: groupByOwner(followUpsResult.data ?? []),
     // The "created by somebody else" test cannot be expressed as a filter across
     // many owners — PostgREST compares a column to a literal, not to another
     // column — so the row is fetched and the comparison happens here.
@@ -366,6 +377,8 @@ function groupByOwner(rows: readonly Record<string, unknown>[]): Map<string, App
       scheduledTime: trimTimeOrNull(row.scheduled_time as string | null),
       status: (row.status as string | null) ?? 'scheduled',
       patientName: patients?.full_name ?? null,
+      followUpDate: (row.follow_up_date as string | null) ?? null,
+      followUpTime: trimTimeOrNull(row.follow_up_time as string | null),
     });
     byOwner.set(ownerId, list);
   }

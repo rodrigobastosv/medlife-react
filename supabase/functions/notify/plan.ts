@@ -27,6 +27,7 @@ export const NOTIFICATION_KINDS = [
   'recalls',
   'newAppointment',
   'upcomingVisit',
+  'followUps',
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -47,6 +48,11 @@ const KIND_ROLES: Record<NotificationKind, readonly UserRole[]> = {
   recalls: ['doctor', 'secretary'],
   newAppointment: ['doctor'],
   upcomingVisit: ['doctor', 'secretary'],
+  // Doctor-only, and checked here rather than trusted from the client: an
+  // acompanhamento is the doctor asking a patient how they are, which is not
+  // work a secretary can take over. A preference row outlives the role that
+  // wrote it, so a switch merely hidden in the UI is not a switch that is off.
+  followUps: ['doctor'],
 };
 
 export interface NotificationPreferences {
@@ -58,6 +64,8 @@ export interface NotificationPreferences {
   readonly newAppointmentEnabled: boolean;
   readonly upcomingVisitEnabled: boolean;
   readonly upcomingLeadMinutes: number;
+  /** No companion time: each acompanhamento carries its own. */
+  readonly followUpsEnabled: boolean;
 }
 
 /**
@@ -78,6 +86,10 @@ export interface Appointment {
   readonly scheduledTime: string | null;
   readonly status: string;
   readonly patientName: string | null;
+  /** `yyyy-MM-dd`, or null when no acompanhamento was marked. */
+  readonly followUpDate: string | null;
+  /** `HH:mm`, or null — the form leaves the hour optional. */
+  readonly followUpTime: string | null;
 }
 
 /** Where clicking the notification should land, in domain terms. */
@@ -115,6 +127,8 @@ export interface NotificationSnapshot {
   readonly todayAppointments: readonly Appointment[];
   /** Recalls whose date has already arrived. */
   readonly pendingRecalls: readonly Appointment[];
+  /** Acompanhamentos whose date has already arrived. */
+  readonly pendingFollowUps: readonly Appointment[];
   /** Appointments on this doctor's agenda that somebody else created. */
   readonly foreignAppointments: readonly Appointment[];
   /** Keys already in `notification_deliveries` for this user. */
@@ -138,6 +152,7 @@ export function planNotifications(snapshot: NotificationSnapshot): DueNotificati
     ...planRecalls(snapshot),
     ...planNewAppointments(snapshot),
     ...planUpcomingVisits(snapshot),
+    ...planFollowUps(snapshot),
   ];
 
   return due.filter(
@@ -275,6 +290,53 @@ function planUpcomingVisits(snapshot: NotificationSnapshot): DueNotification[] {
   });
 }
 
+/**
+ * One notice per acompanhamento, at the hour the doctor chose for it.
+ *
+ * The shape is the opposite of `planRecalls` on purpose. A recall has only a
+ * date, so its notification is a daily digest — "N pacientes esperando contato"
+ * — sent at an hour configured once in Ajustes. An acompanhamento carries its
+ * own hour, picked per patient because that is when the patient can talk, so a
+ * digest would deliberately arrive at the wrong moment. Here the appointment's
+ * own time is the schedule and the notice names the person.
+ *
+ * The dedupe key has no date in it, which makes this fire **once, ever**, rather
+ * than every morning until the doctor clears the field. Nothing marks an
+ * acompanhamento as done — the row simply keeps its date — so a key of
+ * `followup:<id>:<day>` would nag daily about a call that was made on the first
+ * one. The backlog on Início is what remembers; this only says "now".
+ */
+function planFollowUps(snapshot: NotificationSnapshot): DueNotification[] {
+  const { localDate, localMinutes, preferences, pendingFollowUps } = snapshot;
+  if (!preferences.followUpsEnabled) return [];
+
+  return pendingFollowUps.filter(isActive).flatMap((appointment) => {
+    if (appointment.followUpDate === null) return [];
+
+    // Only today's acompanhamentos wait for their hour. One left over from an
+    // earlier day is already late, and holding it until its old time on a new
+    // day would be an alarm for a moment that has passed.
+    if (appointment.followUpDate === localDate) {
+      // Null means the start of the day rather than a missing schedule, which is
+      // the same reading the `nulls first` index and the form's hint give it.
+      if (!hasReached(localMinutes, appointment.followUpTime ?? '00:00')) return [];
+    }
+
+    return [
+      {
+        kind: 'followUps' as const,
+        title: 'Acompanhamento de paciente',
+        body: describeFollowUp(appointment),
+        tag: followUpKey(appointment.id),
+        dedupeKeys: [followUpKey(appointment.id)],
+        // The patient's record: the question is "what did we say last time",
+        // and that is one screen away from the answer.
+        target: { screen: 'patient', patientId: appointment.patientId },
+      },
+    ];
+  });
+}
+
 /* ------------------------------------------------------------------------- */
 /* Keys                                                                      */
 /* ------------------------------------------------------------------------- */
@@ -294,6 +356,7 @@ function planUpcomingVisits(snapshot: NotificationSnapshot): DueNotification[] {
 
 const createdKey = (appointmentId: string): string => `created:${appointmentId}`;
 const upcomingKey = (appointmentId: string): string => `upcoming:${appointmentId}`;
+const followUpKey = (appointmentId: string): string => `followup:${appointmentId}`;
 
 /* ------------------------------------------------------------------------- */
 /* Clock and text                                                            */
@@ -354,6 +417,13 @@ function describeNewAppointment(appointment: Appointment): string {
   return who === undefined || who === ''
     ? `Uma consulta foi marcada para ${when}.`
     : `${who} — ${when}.`;
+}
+
+function describeFollowUp(appointment: Appointment): string {
+  const who = appointment.patientName?.trim();
+  return who === undefined || who === ''
+    ? 'Está na hora de falar com um paciente.'
+    : `Fale com ${who} para saber como está.`;
 }
 
 function describeUpcoming(appointment: Appointment, minutesUntil: number): string {
