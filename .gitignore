@@ -17,7 +17,10 @@ dev-dist
 
 # Editor directories and files
 .vscode/*
+# These two are shared, not personal: they are what stops the editor reporting
+# errors on the Deno functions and the Tailwind v4 stylesheet.
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -43,3 +46,10 @@ dev-dist
 
 # Supabase CLI scratch state (which project ref is linked, etc.)
 supabase/.temp
+
+# Playwright output. The report and traces are build artefacts of a run, and the
+# browser cache is hundreds of megabytes.
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache

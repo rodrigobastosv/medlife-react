@@ -43,10 +43,50 @@ jobs:
       - name: Build
         run: npm run build
 
+  e2e:
+    name: Testes E2E
+    runs-on: ubuntu-latest
+    # Roda em paralelo com `qualidade`, não depois: são checagens independentes,
+    # e esperar uma para começar a outra só atrasa o retorno para quem abriu o PR.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # `--with-deps` instala as bibliotecas de sistema que o Chromium precisa
+      # no runner. Sem isso o navegador baixa, mas não abre, e o erro fala de
+      # arquivo .so faltando em vez de dizer o que realmente falta.
+      - name: Instalar o Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Nenhum secret aqui, de propósito. A suíte intercepta toda a rede no
+      # navegador e o playwright.config.ts injeta VITE_* de mentira, então ela
+      # roda igual em PR de fork — que é justamente onde secret não existe.
+      # É também o que garante que nenhum teste toca o banco de produção, que é
+      # compartilhado com o app Flutter e tem paciente de verdade.
+      - name: Testes E2E
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        # `!cancelled()` e não `failure()`: quando alguém cancela um job na mão o
+        # relatório não interessa, mas quando o passo anterior falha ele é a
+        # única forma de ver o que aconteceu — inclusive o trace da retentativa.
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: qualidade
+    needs: [qualidade, e2e]
     # Só publica em merge na main. Em PR o job inteiro é pulado.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

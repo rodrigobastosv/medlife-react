@@ -1,0 +1,18 @@
+{
+  "//": "Editor configuration for the two file sets in this repo that are not plain browser TypeScript. Committed on purpose: without it the editor reports dozens of errors on code that builds and deploys cleanly, and every contributor rediscovers that on their own.",
+
+  "//deno": "supabase/functions is Deno, not Vite. It is outside both tsconfigs (they include `src` and `vite.config.ts`), so VS Code's TypeScript server analyses it against a default project where `Deno` is undefined, `jsr:`/`npm:` specifiers do not resolve, and the `.ts` extensions Deno requires are errors. This hands those paths to the Deno LSP instead. Scoped with enablePaths rather than enabled: turning Deno on for the whole workspace breaks the React side, where imports correctly have no extension.",
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.lint": true,
+
+  "//css": "Tailwind v4 replaced the old `@tailwind` directives with `@import 'tailwindcss'`, `@theme`, `@custom-variant` and `@utility`. The built-in CSS language server knows none of them and reports 'Unknown at rule'. There is nothing to fix in the stylesheet, so the check is turned off; the Tailwind IntelliSense extension recommended alongside this file understands them properly and gives real completions.",
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+
+  "//format": "Prettier is the formatter CI checks with (`npx prettier --check .`), so making it the editor's formatter is what keeps a save from failing the build.",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "[sql]": {
+    "editor.defaultFormatter": null
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "//": "Without these the editor reports errors on code that builds and deploys fine — see the notes in settings.json.",
+  "recommendations": [
+    "denoland.vscode-deno",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "oxc.oxc-vscode"
+  ]
+}

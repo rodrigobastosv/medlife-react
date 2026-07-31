@@ -11,20 +11,31 @@ npm run lint             # oxlint
 npx prettier --check .   # CI runs this; --write to fix
 ```
 
-**There is no test runner.** No vitest, no jest, no test files. `npm run build`
-is the only automated gate besides lint and formatting, and CI runs exactly
-those three. To verify domain logic, run the real module through `jiti` (it is
-already installed) with the `@` alias mapped to `src`, rather than
-reimplementing the logic in a scratch script — a second copy can agree with
-itself and still be wrong.
+**There is no unit test runner.** No vitest, no jest. To verify domain logic,
+run the real module through `jiti` (it is already installed) with the `@` alias
+mapped to `src`, rather than reimplementing the logic in a scratch script — a
+second copy can agree with itself and still be wrong.
+
+**End-to-end tests are Playwright, in `e2e/`** (`npm run test:e2e`). They stub
+Supabase at the browser — `e2e/fixtures/supabase.ts` answers `/auth/v1/*` and
+`/rest/v1/*` from data the test declares — so the suite needs no credentials,
+never touches the shared production database, and runs on pull requests from
+forks. It answers the _token endpoint_ rather than seeding `localStorage`, so it
+is not coupled to `supabase-js`'s private session format. Tests run against
+`npm run dev`, not `preview`: the production build registers a service worker,
+which sits in front of `fetch` and fights Playwright's request interception.
+
+CI runs prettier, lint, build and the e2e suite; a deploy needs all of them.
 
 The dev port is pinned to 3000 in `vite.config.ts`, because Supabase only
 redirects e-mail confirmation links to URLs on its allow-list and a random port
 is never on it. Do not change it.
 
 `/preview.html` renders design-system specimens in both themes with fake data
-and **no Supabase session** — it is the only way to see UI without logging in.
-Authenticated screens cannot be exercised in a headless browser here.
+and **no Supabase session** — the quickest way to eyeball a token or component
+change without logging in. Authenticated screens _can_ be exercised headlessly,
+via the Playwright fixture above; that was not true before it existed, and any
+comment claiming otherwise is stale.
 
 ## Architecture
 
