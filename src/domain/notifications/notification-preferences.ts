@@ -23,6 +23,15 @@ export interface NotificationPreferences {
   readonly upcomingVisitEnabled: boolean;
   readonly upcomingLeadMinutes: UpcomingLeadMinutes;
   /**
+   * No companion time, unlike `recallsTime` — and the asymmetry is the design.
+   *
+   * A recall has only a date, so its notification is a digest the user schedules
+   * ("N pacientes esperando contato", at 09:00). An acompanhamento carries its
+   * own hour, chosen per patient for a reason; a digest hour on top of it would
+   * deliberately arrive at the wrong moment.
+   */
+  readonly followUpsEnabled: boolean;
+  /**
    * Whether this person has ever opted in to push on any device.
    *
    * Separate from the four switches above, which say *what* to send. This says
@@ -52,6 +61,7 @@ export interface NotificationPreferencesRow {
   new_appointment_enabled: boolean | null;
   upcoming_visit_enabled: boolean | null;
   upcoming_lead_minutes: number | null;
+  follow_ups_enabled: boolean | null;
   push_enabled: boolean | null;
   timezone: string | null;
 }
@@ -71,6 +81,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   newAppointmentEnabled: false,
   upcomingVisitEnabled: false,
   upcomingLeadMinutes: 30,
+  followUpsEnabled: false,
   pushEnabled: false,
   // Matches the column default. A user who has not opted in has no timezone of
   // their own yet, and this is the one the clinic actually runs on.
@@ -95,6 +106,7 @@ export function toNotificationPreferences(
     newAppointmentEnabled: row.new_appointment_enabled ?? false,
     upcomingVisitEnabled: row.upcoming_visit_enabled ?? false,
     upcomingLeadMinutes: toUpcomingLeadMinutes(row.upcoming_lead_minutes),
+    followUpsEnabled: row.follow_ups_enabled ?? false,
     pushEnabled: row.push_enabled ?? false,
     timezone: row.timezone ?? DEFAULT_NOTIFICATION_PREFERENCES.timezone,
   };
@@ -109,6 +121,7 @@ export function preferencesToColumns(preferences: NotificationPreferences) {
     new_appointment_enabled: preferences.newAppointmentEnabled,
     upcoming_visit_enabled: preferences.upcomingVisitEnabled,
     upcoming_lead_minutes: preferences.upcomingLeadMinutes,
+    follow_ups_enabled: preferences.followUpsEnabled,
     push_enabled: preferences.pushEnabled,
     timezone: preferences.timezone,
   };

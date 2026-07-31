@@ -43,6 +43,7 @@ export const queryKeys = {
     forPatient: (ownerId: string, patientId: string) =>
       ['appointments', ownerId, 'patient', patientId] as const,
     recalls: (ownerId: string) => ['appointments', ownerId, 'recalls'] as const,
+    followUps: (ownerId: string) => ['appointments', ownerId, 'follow-ups'] as const,
     // The day is in the key so that crossing midnight with the app open is a
     // different query rather than a stale one — the cache cannot know the date
     // moved on its own.

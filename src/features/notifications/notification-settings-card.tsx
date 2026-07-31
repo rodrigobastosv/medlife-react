@@ -152,6 +152,18 @@ function SettingRows({
         </SettingRow>
       )}
 
+      {/* No time control beside it, unlike the two rows above. Those are digests
+          the user schedules; an acompanhamento already carries the hour the
+          doctor chose for that patient, and a second hour here would only be a
+          way to make the reminder arrive at the wrong one. */}
+      {isKindForRole('followUps', role) && (
+        <SettingRow
+          kind="followUps"
+          isOn={preferences.followUpsEnabled}
+          onToggle={(followUpsEnabled) => onUpdate({ followUpsEnabled })}
+        />
+      )}
+
       {isKindForRole('newAppointment', role) && (
         <SettingRow
           kind="newAppointment"

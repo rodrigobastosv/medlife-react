@@ -2,11 +2,13 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { routes } from '@/app/routing/routes';
+import { useSession } from '@/app/providers/session-context';
 import { messageOf } from '@/core/errors';
 import { dateOnly } from '@/core/format';
 import type { Appointment } from '@/domain/appointments/appointment';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import {
+  usePendingFollowUpsQuery,
   usePendingRecallsQuery,
   useTodayAppointmentsQuery,
   useUpcomingReturnsQuery,
@@ -18,6 +20,7 @@ import { EmptyState } from '@/design-system/components/empty-state';
 import {
   BellIcon,
   CalendarIcon,
+  ChatIcon,
   ChevronRightIcon,
   PeopleIcon,
   RepeatIcon,
@@ -40,6 +43,15 @@ export function HomePage() {
   const today = useTodayAppointmentsQuery();
   const recalls = usePendingRecallsQuery();
   const returns = useUpcomingReturnsQuery();
+
+  // Acompanhamentos are the doctor's own contact list — "ask how this patient
+  // is" — as opposed to the recall queue above, which is the secretary's work of
+  // booking the next consultation. A secretary is shown neither the card nor the
+  // section, because it is a backlog she cannot clear. The query knows this too
+  // and does not run for her.
+  const { role } = useSession();
+  const isDoctor = role === 'doctor';
+  const followUps = usePendingFollowUpsQuery();
 
   // The birthday card needs the patients themselves, not a count. That is the
   // same cache entry Pacientes fills, so moving between the two screens costs
@@ -77,9 +89,23 @@ export function HomePage() {
           <ChevronRightIcon className="size-6" />
         </Link>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Three across for a secretary, four for a doctor. The column count
+            follows the number of cards rather than being fixed at three, or the
+            fourth would sit alone on a row of its own. */}
+        <div
+          className={
+            isDoctor ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-4' : 'grid gap-4 sm:grid-cols-3'
+          }
+        >
           <SummaryCard icon={<CalendarIcon />} label="Consultas hoje" value={today.data?.length} />
           <SummaryCard icon={<BellIcon />} label="Recalls pendentes" value={recalls.data?.length} />
+          {isDoctor && (
+            <SummaryCard
+              icon={<ChatIcon />}
+              label="Acompanhamentos"
+              value={followUps.data?.length}
+            />
+          )}
           <SummaryCard
             icon={<RepeatIcon />}
             label="Retornos futuros"
@@ -111,6 +137,19 @@ export function HomePage() {
             emptyIcon={<BellIcon />}
           />
         </Section>
+
+        {isDoctor && (
+          <Section title="Acompanhamentos pendentes">
+            <AppointmentList
+              isPending={followUps.isPending}
+              error={followUps.error}
+              appointments={followUps.data}
+              emptyTitle="Nenhum acompanhamento"
+              emptyMessage="Os acompanhamentos que você marcar nas consultas aparecem aqui quando chega o dia."
+              emptyIcon={<ChatIcon />}
+            />
+          </Section>
+        )}
 
         <Section title="Próximos retornos">
           <AppointmentList

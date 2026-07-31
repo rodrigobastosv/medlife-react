@@ -1,7 +1,7 @@
 import type { UserRole } from '@/domain/auth/user-role';
 
 /**
- * The four things the app is allowed to interrupt someone about.
+ * The five things the app is allowed to interrupt someone about.
  *
  * A string-literal union and a `Record` rather than a TypeScript `enum`, for the
  * reasons already written out in `domain/auth/user-role.ts`: the `Record` is
@@ -14,6 +14,7 @@ export const NOTIFICATION_KINDS = [
   'recalls',
   'newAppointment',
   'upcomingVisit',
+  'followUps',
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -23,6 +24,7 @@ export const notificationKindLabel: Record<NotificationKind, string> = {
   recalls: 'Pacientes para ligar',
   newAppointment: 'Nova consulta marcada',
   upcomingVisit: 'Lembrete antes da consulta',
+  followUps: 'Acompanhamento de paciente',
 };
 
 /** The one-line explanation under each switch in Ajustes. */
@@ -31,6 +33,7 @@ export const notificationKindDescription: Record<NotificationKind, string> = {
   recalls: 'Quantos pacientes estão na fila de recall vencido.',
   newAppointment: 'Avisa quando outra pessoa marca uma consulta na sua agenda.',
   upcomingVisit: 'Um aviso pouco antes de cada consulta começar.',
+  followUps: 'Avisa na hora de falar com um paciente para saber como ele está.',
 };
 
 /**
@@ -51,6 +54,13 @@ export const notificationKindRoles: Record<NotificationKind, readonly UserRole[]
   recalls: ['doctor', 'secretary'],
   newAppointment: ['doctor'],
   upcomingVisit: ['doctor', 'secretary'],
+  // The doctor's alone, and that is the whole distinction between an
+  // acompanhamento and a recall. A recall is the secretary's queue — call the
+  // patient to book the next consultation — and she is offered it above. An
+  // acompanhamento is the doctor asking how someone is, which is not work that
+  // can be handed over, so telling the secretary about it would be telling her
+  // about a task she cannot do.
+  followUps: ['doctor'],
 };
 
 export const isKindForRole = (kind: NotificationKind, role: UserRole): boolean =>

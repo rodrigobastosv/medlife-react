@@ -104,6 +104,7 @@ async function run(): Promise<RunSummary> {
       // what her day actually looks like.
       todayAppointments: candidate.ownerIds.flatMap((id) => appointments.onDay.get(id) ?? []),
       pendingRecalls: candidate.ownerIds.flatMap((id) => appointments.recalls.get(id) ?? []),
+      pendingFollowUps: candidate.ownerIds.flatMap((id) => appointments.followUps.get(id) ?? []),
       foreignAppointments: candidate.ownerIds.flatMap((id) => appointments.foreign.get(id) ?? []),
       delivered: deliveredByUser.get(candidate.userId) ?? new Set<string>(),
     });

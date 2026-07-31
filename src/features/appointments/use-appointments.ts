@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { dateOnly } from '@/core/format';
-import { useDataScope } from '@/app/providers/session-context';
+import { useDataScope, useSession } from '@/app/providers/session-context';
 import {
   createAppointment,
   deleteAppointment,
   fetchAgenda,
   fetchAppointmentsOnDay,
   fetchPatientAppointments,
+  fetchPendingFollowUps,
   fetchPendingRecalls,
   fetchUpcomingReturns,
   updateAppointment,
@@ -32,6 +33,27 @@ export function usePendingRecallsQuery() {
     // the component body. Called during render it would be a new value on every
     // render — and if it were part of the key, every render would be a new query.
     queryFn: () => fetchPendingRecalls(scope, dateOnly(new Date())),
+  });
+}
+
+/**
+ * The doctor's acompanhamento backlog — patients due to be asked how they are.
+ *
+ * A sibling of `usePendingRecallsQuery`, not a variant of it: that one is the
+ * secretary's queue for booking the next consultation. Same shape, different
+ * work, so they get their own key and invalidate independently.
+ */
+export function usePendingFollowUpsQuery() {
+  const scope = useDataScope();
+  const { role } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.appointments.followUps(scope.ownerId),
+    queryFn: () => fetchPendingFollowUps(scope, dateOnly(new Date())),
+    // Disabled rather than not called: hooks cannot be conditional, and the
+    // alternative — letting a secretary fetch a queue only the doctor can act
+    // on — is a request per home screen for a list that is never rendered.
+    enabled: role === 'doctor',
   });
 }
 

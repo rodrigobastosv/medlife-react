@@ -50,6 +50,9 @@ const APPOINTMENTS: readonly Appointment[] = [
     patientPhone: '(85) 99999-8888',
     nextReturnDate: new Date(2026, 9, 14),
     recallDate: null,
+    // Acompanhamento com hora: o tile mostra "às 16:30" depois da data.
+    followUpDate: new Date(2026, 6, 21),
+    followUpTime: '16:30',
     notes: null,
     createdAt: new Date(2026, 6, 1),
     createdBy: 'd1',
@@ -72,6 +75,10 @@ const APPOINTMENTS: readonly Appointment[] = [
     patientPhone: '8533334444',
     nextReturnDate: null,
     recallDate: new Date(2026, 7, 3),
+    // Acompanhamento só com o dia, ao lado de um recall: as duas tags juntas são
+    // o jeito mais rápido de conferir que elas se distinguem à primeira vista.
+    followUpDate: new Date(2026, 7, 5),
+    followUpTime: null,
     notes: null,
     createdAt: new Date(2026, 6, 2),
     createdBy: 'd1',
@@ -93,6 +100,8 @@ const APPOINTMENTS: readonly Appointment[] = [
     patientPhone: null,
     nextReturnDate: null,
     recallDate: null,
+    followUpDate: null,
+    followUpTime: null,
     notes: null,
     createdAt: new Date(2026, 6, 3),
     // Sem autor, como toda linha anterior à coluna `created_by`.
