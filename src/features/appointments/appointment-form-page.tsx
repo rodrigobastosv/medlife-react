@@ -29,6 +29,8 @@ import {
   useSaveAppointmentMutation,
 } from '@/features/appointments/use-appointments';
 import { BackLink } from '@/features/navigation/back-link';
+import { UnsavedChangesDialog } from '@/features/navigation/unsaved-changes-dialog';
+import { useUnsavedChangesGuard } from '@/features/navigation/use-unsaved-changes-guard';
 import { usePatientQuery } from '@/features/patients/use-patients';
 import { Button } from '@/design-system/components/button';
 import { Card, CardTitle } from '@/design-system/components/card';
@@ -143,11 +145,16 @@ function AppointmentFormView({
     register,
     handleSubmit,
     control,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<AppointmentForm>({
     resolver: zodResolver(schema),
     defaultValues: toFormValues(appointment, initialDate),
   });
+
+  // Subscribing to `isDirty` costs one extra render of the form, and only one:
+  // it flips on the first edit and then stays true. That is a different thing
+  // from `watch()`, which would re-render on every keystroke.
+  const unsavedChanges = useUnsavedChangesGuard(isDirty);
 
   // `useWatch` subscribes to a single field, so typing in it re-renders only
   // what depends on it. Reading `watch('paymentMethod')` instead would re-render
@@ -160,6 +167,10 @@ function AppointmentFormView({
     saveMutation.mutate(toDraft(values, { patientId, canSeeFinances }), {
       onSuccess: () => {
         showToast({ tone: 'success', message: 'Consulta salva' });
+        // Before the redirect, never after: the form is still dirty as far as
+        // react-hook-form is concerned, so without this the guard would ask
+        // whether to discard the changes that were just written to the database.
+        unsavedChanges.allowNavigation();
         void navigate(routes.patient(patientId), { replace: true });
       },
       onError: (error) => showToast({ tone: 'error', message: messageOf(error) }),
@@ -314,6 +325,10 @@ function AppointmentFormView({
           deleteMutation.mutate(appointment.id, {
             onSuccess: () => {
               showToast({ tone: 'success', message: 'Consulta excluída' });
+              // Same reason as the save, and here it is not even a trade-off:
+              // the appointment no longer exists, so there is nothing left for
+              // the unsaved edits to be saved into.
+              unsavedChanges.allowNavigation();
               void navigate(routes.patient(patientId), { replace: true });
             },
             onError: (error) => {
@@ -323,6 +338,8 @@ function AppointmentFormView({
           });
         }}
       />
+
+      <UnsavedChangesDialog guard={unsavedChanges} />
     </Page>
   );
 }
