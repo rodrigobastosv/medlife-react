@@ -1,7 +1,7 @@
 import type { UserRole } from '@/domain/auth/user-role';
 
 /**
- * The five things the app is allowed to interrupt someone about.
+ * The six things the app is allowed to interrupt someone about.
  *
  * A string-literal union and a `Record` rather than a TypeScript `enum`, for the
  * reasons already written out in `domain/auth/user-role.ts`: the `Record` is
@@ -12,6 +12,7 @@ import type { UserRole } from '@/domain/auth/user-role';
 export const NOTIFICATION_KINDS = [
   'dailyAgenda',
   'recalls',
+  'birthdays',
   'newAppointment',
   'upcomingVisit',
   'followUps',
@@ -22,6 +23,7 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 export const notificationKindLabel: Record<NotificationKind, string> = {
   dailyAgenda: 'Consultas do dia',
   recalls: 'Pacientes para ligar',
+  birthdays: 'Aniversariantes do dia',
   newAppointment: 'Nova consulta marcada',
   upcomingVisit: 'Lembrete antes da consulta',
   followUps: 'Acompanhamento de paciente',
@@ -31,6 +33,9 @@ export const notificationKindLabel: Record<NotificationKind, string> = {
 export const notificationKindDescription: Record<NotificationKind, string> = {
   dailyAgenda: 'Um resumo com quantas consultas você tem hoje.',
   recalls: 'Quantos pacientes estão na fila de recall vencido.',
+  // Says "hoje" out loud because the card on Início shows the whole month, and
+  // somebody who has seen it will otherwise expect this to repeat that list.
+  birthdays: 'Quais pacientes fazem aniversário hoje.',
   newAppointment: 'Avisa quando outra pessoa marca uma consulta na sua agenda.',
   upcomingVisit: 'Um aviso pouco antes de cada consulta começar.',
   followUps: 'Avisa na hora de falar com um paciente para saber como ele está.',
@@ -52,6 +57,12 @@ export const notificationKindDescription: Record<NotificationKind, string> = {
 export const notificationKindRoles: Record<NotificationKind, readonly UserRole[]> = {
   dailyAgenda: ['doctor', 'secretary'],
   recalls: ['doctor', 'secretary'],
+  // Both, unlike `followUps` — and the reason is who makes the call. Wishing a
+  // patient a happy birthday is contact work, which is the secretary's, but it
+  // is also the kind of thing a doctor in a small practice does personally. The
+  // register is shared, so neither of them is being told about somebody else's
+  // task; they are being told about the same one.
+  birthdays: ['doctor', 'secretary'],
   newAppointment: ['doctor'],
   upcomingVisit: ['doctor', 'secretary'],
   // The doctor's alone, and that is the whole distinction between an

@@ -126,10 +126,15 @@ export async function fetchAgenda(
     .from(Table.appointments)
     .select(columnsWithPatient(scope))
     .eq('owner_id', scope.ownerId)
+    // One row qualifies through any of its four dates, because any of them can
+    // be the thing the calendar is showing on the day being looked at. A row
+    // whose consultation was in March and whose acompanhamento is in April has
+    // to come back for April.
     .or(
       `and(scheduled_date.gte.${from},scheduled_date.lte.${to}),` +
         `and(next_return_date.gte.${from},next_return_date.lte.${to}),` +
-        `and(recall_date.gte.${from},recall_date.lte.${to})`,
+        `and(recall_date.gte.${from},recall_date.lte.${to}),` +
+        `and(follow_up_date.gte.${from},follow_up_date.lte.${to})`,
     )
     .order('scheduled_date', { ascending: true })
     // Within a day the running order is the clock. Legacy rows with no time

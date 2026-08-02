@@ -25,6 +25,7 @@ export type UserRole = 'doctor' | 'secretary';
 export const NOTIFICATION_KINDS = [
   'dailyAgenda',
   'recalls',
+  'birthdays',
   'newAppointment',
   'upcomingVisit',
   'followUps',
@@ -46,6 +47,7 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 const KIND_ROLES: Record<NotificationKind, readonly UserRole[]> = {
   dailyAgenda: ['doctor', 'secretary'],
   recalls: ['doctor', 'secretary'],
+  birthdays: ['doctor', 'secretary'],
   newAppointment: ['doctor'],
   upcomingVisit: ['doctor', 'secretary'],
   // Doctor-only, and checked here rather than trusted from the client: an
@@ -61,6 +63,9 @@ export interface NotificationPreferences {
   readonly dailyAgendaTime: string;
   readonly recallsEnabled: boolean;
   readonly recallsTime: string;
+  readonly birthdaysEnabled: boolean;
+  /** `HH:mm` — a birthday is a date with no hour, so the digest needs one. */
+  readonly birthdaysTime: string;
   readonly newAppointmentEnabled: boolean;
   readonly upcomingVisitEnabled: boolean;
   readonly upcomingLeadMinutes: number;
@@ -92,6 +97,24 @@ export interface Appointment {
   readonly followUpTime: string | null;
 }
 
+/**
+ * A patient, as the birthday digest needs them.
+ *
+ * `birthDate` is a `yyyy-MM-dd` string and stays one, for the same reason the
+ * appointment dates do — but here the argument is stronger. A birth date is a
+ * calendar day whose *year* belongs to a different era from the comparison being
+ * made: matching it against today means comparing the month and the day and
+ * nothing else. Parsing it into a `Date` would invite exactly the mistake of
+ * building "this year's birthday" and comparing whole instants, which matches
+ * nobody. Rows with no birth date never reach this type.
+ */
+export interface PatientRecord {
+  readonly id: string;
+  readonly fullName: string | null;
+  /** `yyyy-MM-dd`, never null — the query filters the empty ones out. */
+  readonly birthDate: string;
+}
+
 /** Where clicking the notification should land, in domain terms. */
 export type NotificationTarget =
   | { readonly screen: 'home' }
@@ -116,7 +139,21 @@ export interface DueNotification {
   readonly target: NotificationTarget;
 }
 
-export interface NotificationSnapshot {
+/**
+ * What `planBirthdays` needs to know before anyone has looked at a patient.
+ *
+ * Split out of the snapshot so `index.ts` can ask "is this digest due?" *before*
+ * deciding to read the register — see `isBirthdayDigestDue`.
+ */
+export interface BirthdayDigestContext {
+  readonly localDate: string;
+  readonly localMinutes: number;
+  readonly role: UserRole;
+  readonly preferences: Pick<NotificationPreferences, 'birthdaysEnabled' | 'birthdaysTime'>;
+  readonly delivered: ReadonlySet<string>;
+}
+
+export interface NotificationSnapshot extends BirthdayDigestContext {
   /** Today in the user's timezone, `yyyy-MM-dd`, resolved by Postgres. */
   readonly localDate: string;
   /** Minutes since local midnight, resolved by Postgres. */
@@ -131,6 +168,16 @@ export interface NotificationSnapshot {
   readonly pendingFollowUps: readonly Appointment[];
   /** Appointments on this doctor's agenda that somebody else created. */
   readonly foreignAppointments: readonly Appointment[];
+  /**
+   * Every patient of this user's doctors who has a birth date recorded — *not*
+   * only today's birthdays. Which of them is celebrating is a rule, and it is
+   * `birthdaysOn` below rather than a query.
+   *
+   * Empty on the runs where no birthday digest is due, because the register is
+   * not read at all then. That is safe precisely because the emptiness and the
+   * skip are decided by the same predicate.
+   */
+  readonly patients: readonly PatientRecord[];
   /** Keys already in `notification_deliveries` for this user. */
   readonly delivered: ReadonlySet<string>;
 }
@@ -150,6 +197,7 @@ export function planNotifications(snapshot: NotificationSnapshot): DueNotificati
   const due = [
     ...planDailyAgenda(snapshot),
     ...planRecalls(snapshot),
+    ...planBirthdays(snapshot),
     ...planNewAppointments(snapshot),
     ...planUpcomingVisits(snapshot),
     ...planFollowUps(snapshot),
@@ -166,7 +214,7 @@ export function planNotifications(snapshot: NotificationSnapshot): DueNotificati
 }
 
 /* ------------------------------------------------------------------------- */
-/* The four kinds                                                            */
+/* The kinds                                                                 */
 /* ------------------------------------------------------------------------- */
 
 function planDailyAgenda(snapshot: NotificationSnapshot): DueNotification[] {
@@ -216,6 +264,63 @@ function planRecalls(snapshot: NotificationSnapshot): DueNotification[] {
       tag: `recalls:${localDate}`,
       dedupeKeys: [`recalls:${localDate}`],
       target: { screen: 'home' },
+    },
+  ];
+}
+
+/**
+ * Whether today's birthday digest is still owed to this user.
+ *
+ * Exported because `index.ts` uses it as a gate on reading the patient register
+ * at all: the answer is false on all but one run a day, and the read it saves is
+ * "every patient of every subscribed doctor", once a minute, forever. Keeping
+ * the test here rather than rewriting it at the call site is what guarantees the
+ * gate and the planner cannot drift apart — a snapshot with no patients is only
+ * ever produced when this said there was nothing to send.
+ */
+export function isBirthdayDigestDue(context: BirthdayDigestContext): boolean {
+  if (!KIND_ROLES.birthdays.includes(context.role)) return false;
+  if (!context.preferences.birthdaysEnabled) return false;
+  if (!hasReached(context.localMinutes, context.preferences.birthdaysTime)) return false;
+  return !context.delivered.has(birthdaysKey(context.localDate));
+}
+
+/**
+ * "Quem faz aniversário hoje", once a day, at the hour the user chose.
+ *
+ * A digest like the recalls one, and for the same reason: a birthday is a date
+ * with no hour, so there is no moment of its own to fire at. The difference is
+ * that a single birthday is worth naming — the useful next step is the patient's
+ * record, where the phone number is — while four are worth counting, because a
+ * notification listing four names is a paragraph on a lock screen.
+ */
+function planBirthdays(snapshot: NotificationSnapshot): DueNotification[] {
+  if (!isBirthdayDigestDue(snapshot)) return [];
+
+  const celebrating = birthdaysOn(snapshot.patients, snapshot.localDate);
+  // A quiet day is silence, not a "nenhum aniversariante hoje" that buzzes a
+  // phone to report the absence of an event — the same rule the daily agenda
+  // applies to a day with no consults.
+  if (celebrating.length === 0) return [];
+
+  const first = celebrating[0]!;
+  const single = celebrating.length === 1;
+
+  return [
+    {
+      kind: 'birthdays',
+      title: single ? 'Aniversariante de hoje' : 'Aniversariantes de hoje',
+      body: single
+        ? describeBirthday(first, snapshot.localDate)
+        : `${String(celebrating.length)} pacientes fazem aniversário hoje.`,
+      // The day, so the digest is once per calendar day rather than once per
+      // cron run — and so the shape above (one name or a count) can change
+      // between runs without either version being sent twice.
+      tag: birthdaysKey(snapshot.localDate),
+      dedupeKeys: [birthdaysKey(snapshot.localDate)],
+      // One name earns a link to that record; a count has no single record to
+      // open, and Início is where the month's list already lives.
+      target: single ? { screen: 'patient', patientId: first.id } : { screen: 'home' },
     },
   ];
 }
@@ -354,6 +459,7 @@ function planFollowUps(snapshot: NotificationSnapshot): DueNotification[] {
   rule is not merely observed by this module: it is enforced by Postgres.
 */
 
+const birthdaysKey = (localDate: string): string => `birthdays:${localDate}`;
 const createdKey = (appointmentId: string): string => `created:${appointmentId}`;
 const upcomingKey = (appointmentId: string): string => `upcoming:${appointmentId}`;
 const followUpKey = (appointmentId: string): string => `followup:${appointmentId}`;
@@ -403,6 +509,42 @@ function minutesUntilAppointment(
 }
 
 /**
+ * The patients whose birthday is `localDate`, by month and day only.
+ *
+ * String comparison on the `MM-dd` tail, which is the whole rule: the year in a
+ * birth date says when the patient was born and has nothing to do with whether
+ * today is their birthday. Sorted by name so a run that has to describe one of
+ * several always describes the same one.
+ *
+ * **29 February is greeted on the 28th in years that do not have a 29th.** The
+ * card on Início can leave a leap-day patient sitting under "fevereiro" and let
+ * a human work it out, because it shows a whole month at once. A daily notice
+ * has no such luxury: the honest-looking option — match nothing — silently
+ * skips those patients three years out of four, which is the one outcome
+ * nobody would choose on purpose. The 28th is the last day their birthday month
+ * actually has, and greeting somebody a day early beats not greeting them at all.
+ */
+function birthdaysOn(
+  patients: readonly PatientRecord[],
+  localDate: string,
+): readonly PatientRecord[] {
+  const today = localDate.slice(5);
+  const alsoLeapDay = today === '02-28' && !isLeapYear(localDate);
+
+  return patients
+    .filter((patient) => {
+      const born = patient.birthDate.slice(5);
+      return born === today || (alsoLeapDay && born === '02-29');
+    })
+    .sort((a, b) => (a.fullName ?? '').localeCompare(b.fullName ?? '', 'pt-BR'));
+}
+
+const isLeapYear = (localDate: string): boolean => {
+  const year = Number(localDate.slice(0, 4));
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+};
+
+/**
  * A cancelled appointment is still a row on the day, and every count and
  * reminder here has to skip it. `no_show` is left in on purpose: it is recorded
  * after the fact, so a consult that is still ahead is never marked with it.
@@ -417,6 +559,23 @@ function describeNewAppointment(appointment: Appointment): string {
   return who === undefined || who === ''
     ? `Uma consulta foi marcada para ${when}.`
     : `${who} — ${when}.`;
+}
+
+/**
+ * "Ana Souza faz 78 anos hoje."
+ *
+ * The age is dropped rather than guessed when the arithmetic gives something
+ * impossible — a birth date in the future is a typo, and "faz −2 anos" is a
+ * worse answer than no answer. The patient is still greeted, which is the same
+ * bargain the birthdays card on Início makes: the row stays, the age goes.
+ */
+function describeBirthday(patient: PatientRecord, localDate: string): string {
+  const who = patient.fullName?.trim();
+  if (who === undefined || who === '') return '1 paciente faz aniversário hoje.';
+
+  const age = Number(localDate.slice(0, 4)) - Number(patient.birthDate.slice(0, 4));
+  if (age <= 0) return `${who} faz aniversário hoje.`;
+  return age === 1 ? `${who} faz 1 ano hoje.` : `${who} faz ${String(age)} anos hoje.`;
 }
 
 function describeFollowUp(appointment: Appointment): string {

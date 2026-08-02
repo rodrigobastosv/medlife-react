@@ -1,24 +1,30 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
 import { dateOnly, formatDate, formatWeekday } from '@/core/format';
 import {
+  agendaEventKey,
   agendaEventTypeLabel,
   dayKey,
+  expandBirthdayEvents,
   groupEventsByDay,
+  AGENDA_EVENT_TYPES,
   type AgendaEvent,
   type AgendaEventType,
+  type BirthdayAgendaEvent,
 } from '@/domain/agenda/agenda-event';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
-import { useAgendaQuery } from '@/features/appointments/use-appointments';
+import { agendaRange, useAgendaQuery } from '@/features/appointments/use-appointments';
+import { PatientContactActions } from '@/features/patients/patient-contact-actions';
 import { PatientPickerDialog } from '@/features/patients/patient-picker-dialog';
+import { usePatientsQuery } from '@/features/patients/use-patients';
 import { Button } from '@/design-system/components/button';
 import { Calendar } from '@/design-system/components/calendar';
 import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
-import { CalendarIcon, PlusIcon } from '@/design-system/components/icons';
+import { CakeIcon, CalendarIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { SkeletonList } from '@/design-system/components/skeleton';
 import { Tag, type TagTone } from '@/design-system/components/tag';
@@ -26,11 +32,13 @@ import { Tag, type TagTone } from '@/design-system/components/tag';
 /**
  * A month calendar over the events of the selected day.
  *
- * One appointment can appear on three days — the visit, the return it scheduled,
- * and the recall — which is why the calendar is fed *events* rather than
- * appointments. That fan-out is a pure function in the domain
- * (`expandAgendaEvents`), so the only thing this page owns is which month and
- * which day are being looked at.
+ * One appointment can appear on four days — the visit, the return it scheduled,
+ * the recall and the acompanhamento — which is why the calendar is fed *events*
+ * rather than appointments. A birthday is a fifth kind of event and comes from
+ * the patient register instead, which is the reason the two are separate queries
+ * merged here rather than one read: the expansions are pure functions in the
+ * domain, and the only thing this page owns is which month and which day are
+ * being looked at.
  */
 export function AgendaPage() {
   // Local UI state, deliberately not in the URL or the cache: which month you
@@ -42,15 +50,31 @@ export function AgendaPage() {
 
   const navigate = useNavigate();
   const agenda = useAgendaQuery(month);
+  // The same cache entry Início and Pacientes fill, so arriving here from either
+  // costs no extra request. Birthdays cannot come from the agenda query at all:
+  // they are a fact about the register, not about anything that was scheduled.
+  const patients = usePatientsQuery();
 
   // Regrouping on every render would rebuild the map for every hover; this ties
-  // it to the data and nothing else.
-  const eventsByDay = useMemo(() => groupEventsByDay(agenda.data ?? []), [agenda.data]);
+  // it to the data and nothing else. The appointment events come first so that
+  // within a day the scheduled hours keep the order the query sorted them into
+  // and the birthdays — which have no hour — sit under them.
+  const eventsByDay = useMemo(
+    () =>
+      groupEventsByDay([
+        ...(agenda.data ?? []),
+        ...expandBirthdayEvents(patients.data ?? [], agendaRange(month)),
+      ]),
+    [agenda.data, patients.data, month],
+  );
   const selectedEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
 
   return (
     <Page>
-      <PageHeader title="Agenda" subtitle="Consultas, retornos e recalls." />
+      <PageHeader
+        title="Agenda"
+        subtitle="Consultas, retornos, recalls, acompanhamentos e aniversários."
+      />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:items-start">
         <Card>
@@ -63,10 +87,13 @@ export function AgendaPage() {
               const events = eventsByDay.get(dayKey(day));
               if (events === undefined) return null;
               return (
-                <span className="flex gap-0.5">
-                  {/* Up to three dots, one per event *type* present that day —
-                      not one per event, which on a busy day would be a smear of
-                      dots that says nothing. */}
+                // Wraps rather than overflowing: five types is five dots, which
+                // is wider than a day cell, and a second row of them inside the
+                // cell is better than a marker silently pushed out of view.
+                <span className="flex max-w-full flex-wrap justify-center gap-0.5">
+                  {/* One dot per event *type* present that day — not one per
+                      event, which on a busy day would be a smear of dots that
+                      says nothing. */}
                   {distinctTypes(events).map((type) => (
                     <span
                       key={type}
@@ -79,7 +106,10 @@ export function AgendaPage() {
             }}
           />
           <div className="border-outline mt-4 flex flex-wrap gap-3 border-t pt-4 text-xs">
-            {(['consultation', 'return', 'recall'] as const).map((type) => (
+            {/* Read off the type list rather than repeated here, so a type added
+                to the domain cannot end up on the calendar as an unexplained
+                colour. */}
+            {AGENDA_EVENT_TYPES.map((type) => (
               <span key={type} className="flex items-center gap-1.5">
                 <span className={`size-2 rounded-full ${dotClasses[type]}`} aria-hidden />
                 {agendaEventTypeLabel[type]}
@@ -99,7 +129,12 @@ export function AgendaPage() {
             </Button>
           </div>
 
-          {agenda.isPending ? (
+          {/* The register is part of the answer now, so "nada neste dia" cannot
+              be said before it has arrived. A *failure* to load it is different:
+              the agenda still has everything that was scheduled, and losing the
+              whole screen over a birthday list nobody came here for would be the
+              worse trade. */}
+          {agenda.isPending || patients.isPending ? (
             <SkeletonList rows={2} />
           ) : agenda.isError ? (
             <EmptyState
@@ -117,15 +152,24 @@ export function AgendaPage() {
               onAction={() => setIsPickingPatient(true)}
             />
           ) : (
-            <ul className="flex flex-col gap-3">
+            // Named, because it is not the only list on this screen — the
+            // patient picker holds another — and "lista" on its own tells a
+            // screen reader nothing about which one it has landed in.
+            <ul aria-label="Eventos do dia" className="flex flex-col gap-3">
               {selectedEvents.map((event) => (
-                // One appointment can produce three events, so its id alone is
-                // not unique within a day's list — the type completes the key.
-                <li key={`${event.appointment.id}-${event.type}`} className="flex flex-col gap-1">
-                  <Tag tone={tagTones[event.type]} className="self-start">
+                <li key={agendaEventKey(event)} className="flex flex-col gap-1">
+                  <Tag
+                    tone={tagTones[event.type]}
+                    icon={event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined}
+                    className="self-start"
+                  >
                     {agendaEventTypeLabel[event.type]}
                   </Tag>
-                  <AppointmentTile appointment={event.appointment} showPatientName />
+                  {event.type === 'birthday' ? (
+                    <BirthdayTile event={event} />
+                  ) : (
+                    <AppointmentTile appointment={event.appointment} showPatientName />
+                  )}
                 </li>
               ))}
             </ul>
@@ -149,16 +193,66 @@ export function AgendaPage() {
   );
 }
 
+/**
+ * A birthday as a row, shaped like `AppointmentTile` because it sits in the same
+ * list — the same card, the same link to the record, the same contact bar.
+ *
+ * That bar is the point of putting birthdays here at all: the useful next move
+ * is to call or message the patient, and it is the same two buttons the rows
+ * around it offer. It renders nothing when the register has no phone number,
+ * exactly as it does for an appointment.
+ */
+function BirthdayTile({ event }: { event: BirthdayAgendaEvent }) {
+  const { patient, turningAge } = event;
+
+  return (
+    <div className="bg-surface-container-low border-outline/70 flex flex-col overflow-hidden rounded-l border">
+      <Link
+        to={routes.patient(patient.id)}
+        className="hover:bg-surface-container-high flex flex-col gap-1 p-4 transition-colors"
+      >
+        <span className="font-semibold">{patient.fullName}</span>
+        <span className="text-on-surface-variant text-sm">{ageLine(turningAge)}</span>
+      </Link>
+
+      <PatientContactActions
+        phone={patient.phone}
+        patientName={patient.fullName}
+        className="border-outline/70 border-t px-4 py-2"
+      />
+    </div>
+  );
+}
+
+/**
+ * "Faz 78 anos hoje" is wrong on a calendar — the day being read is not
+ * necessarily today — so the line says only what the age is. A birth date in the
+ * future is a typo, and the same honest answer the card on Início gives is the
+ * one that belongs here: no invented age, and the patient still on the list,
+ * where somebody will notice the date needs fixing.
+ */
+const ageLine = (turningAge: number | null): string => {
+  if (turningAge === null) return 'Data de nascimento a conferir';
+  return turningAge === 1 ? 'Faz 1 ano' : `Faz ${turningAge} anos`;
+};
+
 const dotClasses: Record<AgendaEventType, string> = {
   consultation: 'bg-primary',
   return: 'bg-violet',
   recall: 'bg-warning',
+  followUp: 'bg-success',
+  birthday: 'bg-secondary',
 };
 
 const tagTones: Record<AgendaEventType, TagTone> = {
   consultation: 'primary',
   return: 'neutral',
   recall: 'warning',
+  // Green for the doctor's own call, matching its dot. The birthday keeps the
+  // quiet tag and earns its distinction from the cake icon instead — five
+  // saturated labels in one day's list would make none of them stand out.
+  followUp: 'success',
+  birthday: 'neutral',
 };
 
 const distinctTypes = (events: readonly AgendaEvent[]): AgendaEventType[] => [

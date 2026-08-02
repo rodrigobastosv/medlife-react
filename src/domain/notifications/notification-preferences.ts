@@ -19,6 +19,15 @@ export interface NotificationPreferences {
   readonly recallsEnabled: boolean;
   /** `HH:mm` — when the recall backlog is due. */
   readonly recallsTime: string;
+  readonly birthdaysEnabled: boolean;
+  /**
+   * `HH:mm` — when the day's birthday list is due.
+   *
+   * It has a time of its own, like the recall digest and unlike the
+   * acompanhamento: a birthday is a date with no hour attached, so somebody has
+   * to say when the summary should arrive.
+   */
+  readonly birthdaysTime: string;
   readonly newAppointmentEnabled: boolean;
   readonly upcomingVisitEnabled: boolean;
   readonly upcomingLeadMinutes: UpcomingLeadMinutes;
@@ -58,6 +67,8 @@ export interface NotificationPreferencesRow {
   daily_agenda_time: string | null;
   recalls_enabled: boolean | null;
   recalls_time: string | null;
+  birthdays_enabled: boolean | null;
+  birthdays_time: string | null;
   new_appointment_enabled: boolean | null;
   upcoming_visit_enabled: boolean | null;
   upcoming_lead_minutes: number | null;
@@ -78,6 +89,10 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   dailyAgendaTime: '07:30',
   recallsEnabled: false,
   recallsTime: '09:00',
+  birthdaysEnabled: false,
+  // The same hour as the recall digest, and the same reasoning: it is the other
+  // list of people somebody sits down to call in the morning.
+  birthdaysTime: '09:00',
   newAppointmentEnabled: false,
   upcomingVisitEnabled: false,
   upcomingLeadMinutes: 30,
@@ -103,6 +118,9 @@ export function toNotificationPreferences(
       toTimeOfDay(row.daily_agenda_time) ?? DEFAULT_NOTIFICATION_PREFERENCES.dailyAgendaTime,
     recallsEnabled: row.recalls_enabled ?? false,
     recallsTime: toTimeOfDay(row.recalls_time) ?? DEFAULT_NOTIFICATION_PREFERENCES.recallsTime,
+    birthdaysEnabled: row.birthdays_enabled ?? false,
+    birthdaysTime:
+      toTimeOfDay(row.birthdays_time) ?? DEFAULT_NOTIFICATION_PREFERENCES.birthdaysTime,
     newAppointmentEnabled: row.new_appointment_enabled ?? false,
     upcomingVisitEnabled: row.upcoming_visit_enabled ?? false,
     upcomingLeadMinutes: toUpcomingLeadMinutes(row.upcoming_lead_minutes),
@@ -118,6 +136,8 @@ export function preferencesToColumns(preferences: NotificationPreferences) {
     daily_agenda_time: preferences.dailyAgendaTime,
     recalls_enabled: preferences.recallsEnabled,
     recalls_time: preferences.recallsTime,
+    birthdays_enabled: preferences.birthdaysEnabled,
+    birthdays_time: preferences.birthdaysTime,
     new_appointment_enabled: preferences.newAppointmentEnabled,
     upcoming_visit_enabled: preferences.upcomingVisitEnabled,
     upcoming_lead_minutes: preferences.upcomingLeadMinutes,

@@ -152,7 +152,23 @@ function SettingRows({
         </SettingRow>
       )}
 
-      {/* No time control beside it, unlike the two rows above. Those are digests
+      {isKindForRole('birthdays', role) && (
+        <SettingRow
+          kind="birthdays"
+          isOn={preferences.birthdaysEnabled}
+          onToggle={(birthdaysEnabled) => onUpdate({ birthdaysEnabled })}
+        >
+          <TextField
+            label="Horário do aviso"
+            type="time"
+            value={preferences.birthdaysTime}
+            onChange={(event) => onUpdate({ birthdaysTime: event.target.value })}
+            containerClassName="max-w-44"
+          />
+        </SettingRow>
+      )}
+
+      {/* No time control beside it, unlike the three rows above. Those are digests
           the user schedules; an acompanhamento already carries the hour the
           doctor chose for that patient, and a second hour here would only be a
           way to make the reminder arrive at the wrong one. */}

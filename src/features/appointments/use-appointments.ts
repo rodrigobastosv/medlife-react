@@ -96,15 +96,28 @@ export function useUpcomingReturnsQuery() {
  */
 export function useAgendaQuery(month: Date) {
   const scope = useDataScope();
-  const from = new Date(month.getFullYear(), month.getMonth(), -6);
-  const to = new Date(month.getFullYear(), month.getMonth() + 1, 7);
+  const range = agendaRange(month);
 
   return useQuery({
     queryKey: queryKeys.appointments.agenda(scope.ownerId, month),
-    queryFn: () => fetchAgenda(scope, { from, to }),
-    select: (appointments) => expandAgendaEvents(appointments, { from, to }),
+    queryFn: () => fetchAgenda(scope, range),
+    select: (appointments) => expandAgendaEvents(appointments, range),
   });
 }
+
+/**
+ * The days a month's agenda covers, including the neighbouring days the calendar
+ * grid borrows so its leading and trailing cells are not blank.
+ *
+ * Exported because the birthdays shown on the same calendar are expanded over
+ * the same range from a different query, and two definitions of "which days is
+ * this month showing" would eventually disagree by a day at the edges — where
+ * the only visible symptom is a marker missing from the first or last row.
+ */
+export const agendaRange = (month: Date): { from: Date; to: Date } => ({
+  from: new Date(month.getFullYear(), month.getMonth(), -6),
+  to: new Date(month.getFullYear(), month.getMonth() + 1, 7),
+});
 
 export function useSaveAppointmentMutation(appointmentId: string | null) {
   const scope = useDataScope();

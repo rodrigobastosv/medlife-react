@@ -17,6 +17,8 @@ const preferences = (over: Record<string, unknown> = {}) => ({
   daily_agenda_time: '07:30:00',
   recalls_enabled: false,
   recalls_time: '09:00:00',
+  birthdays_enabled: false,
+  birthdays_time: '09:00:00',
   new_appointment_enabled: false,
   upcoming_visit_enabled: false,
   upcoming_lead_minutes: 30,
@@ -29,12 +31,14 @@ test.beforeEach(async ({ supabase }) => {
   supabase.tables.notification_preferences = [preferences()];
 });
 
-test('a doctor is offered all four kinds', async ({ page, supabase }) => {
+test('a doctor is offered every kind', async ({ page, supabase }) => {
   await supabase.signIn({ role: 'doctor' });
   await page.goto('/settings');
 
   await expect(page.getByRole('switch', { name: /Consultas do dia/ })).toBeVisible();
   await expect(page.getByRole('switch', { name: /Pacientes para ligar/ })).toBeVisible();
+  await expect(page.getByRole('switch', { name: /Aniversariantes do dia/ })).toBeVisible();
+  await expect(page.getByRole('switch', { name: /Acompanhamento de paciente/ })).toBeVisible();
   await expect(page.getByRole('switch', { name: /Nova consulta marcada/ })).toBeVisible();
   await expect(page.getByRole('switch', { name: /Lembrete antes da consulta/ })).toBeVisible();
 });
@@ -49,9 +53,14 @@ test('a secretary is not offered "nova consulta marcada"', async ({ page, supaba
   await expect(page.getByRole('switch', { name: /Consultas do dia/ })).toBeVisible();
   await expect(page.getByRole('switch', { name: /Pacientes para ligar/ })).toBeVisible();
   await expect(page.getByRole('switch', { name: /Lembrete antes da consulta/ })).toBeVisible();
+  // Contact work, which is hers as much as the doctor's — unlike the two below.
+  await expect(page.getByRole('switch', { name: /Aniversariantes do dia/ })).toBeVisible();
   // She is usually the somebody-else who booked it; telling her would be the
   // app reporting her own action back to her. Enforced in the planner too.
   await expect(page.getByRole('switch', { name: /Nova consulta marcada/ })).toHaveCount(0);
+  // An acompanhamento is the doctor's own clinical call, not a task she can take
+  // over — the other half of the same rule.
+  await expect(page.getByRole('switch', { name: /Acompanhamento de paciente/ })).toHaveCount(0);
 });
 
 test('turning a switch on saves it and reveals its setting', async ({ page, supabase }) => {

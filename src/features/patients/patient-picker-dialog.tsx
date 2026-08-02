@@ -41,8 +41,11 @@ export function PatientPickerDialog({
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
 
-  // Only fetched once the dialog is opened. The agenda has no other use for the
-  // patient list, and a modal nobody opens should not cost a request.
+  // Only fetched once the dialog is opened — kept for a caller that has no other
+  // use for the register, since a modal nobody opens should not cost a request.
+  // The agenda, its only caller today, now reads the same list for the birthdays
+  // on the calendar, so there the gate costs nothing and saves nothing: it is the
+  // same cache entry, already resolved by the time anyone clicks.
   const patients = usePatientsQuery({ enabled: open });
 
   const filtered = useMemo(

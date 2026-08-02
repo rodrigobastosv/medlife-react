@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApplicationServer } from '@negrel/webpush';
 
-import { planNotifications, type DueNotification } from './plan.ts';
+import {
+  isBirthdayDigestDue,
+  planNotifications,
+  type DueNotification,
+  type PatientRecord,
+} from './plan.ts';
 import { applicationServer, pathFor, sendPush } from './push.ts';
 import {
   claimDelivery,
@@ -9,6 +14,7 @@ import {
   fetchAppointments,
   fetchCandidates,
   fetchDelivered,
+  fetchPatientsWithBirthDate,
   fetchSubscriptions,
   recordFailure,
   recordSuccess,
@@ -82,6 +88,41 @@ async function run(): Promise<RunSummary> {
     fetchSubscriptions(db, userIds),
   ]);
 
+  /*
+    The patient register is read second, and usually not at all.
+
+    Every other read above is bounded by a date — today's appointments, the last
+    two days of bookings. "Everyone with a birth date" is bounded by nothing, and
+    this function runs once a minute, so fetching it alongside the rest would
+    mean pulling every subscribed doctor's whole register 1440 times a day to
+    answer a question that changes once. Instead the run asks who is still owed
+    today's digest — which needs `delivered`, hence the second round trip — and
+    reads the register only for their doctors, on the one run that will actually
+    send it.
+  */
+  const birthdayOwnerIds = [
+    ...new Set(
+      candidates
+        .filter(
+          (candidate) =>
+            (subscriptionsByUser.get(candidate.userId)?.length ?? 0) > 0 &&
+            isBirthdayDigestDue({
+              localDate: clocks.get(candidate.userId)!.date,
+              localMinutes: clocks.get(candidate.userId)!.minutes,
+              role: candidate.role,
+              preferences: candidate.preferences,
+              delivered: deliveredByUser.get(candidate.userId) ?? new Set<string>(),
+            }),
+        )
+        .flatMap((candidate) => candidate.ownerIds),
+    ),
+  ];
+
+  const patientsByOwner =
+    birthdayOwnerIds.length === 0
+      ? new Map<string, PatientRecord[]>()
+      : await fetchPatientsWithBirthDate(db, birthdayOwnerIds);
+
   // Built once for the whole run, not per message: importing the VAPID keys and
   // deriving the signing material is the expensive part of sending.
   const server = await applicationServer();
@@ -106,6 +147,10 @@ async function run(): Promise<RunSummary> {
       pendingRecalls: candidate.ownerIds.flatMap((id) => appointments.recalls.get(id) ?? []),
       pendingFollowUps: candidate.ownerIds.flatMap((id) => appointments.followUps.get(id) ?? []),
       foreignAppointments: candidate.ownerIds.flatMap((id) => appointments.foreign.get(id) ?? []),
+      // Empty unless this user's digest was the reason the register was read at
+      // all — the planner reaches the same verdict from the same predicate, so
+      // an empty list here is never a birthday that went missing.
+      patients: candidate.ownerIds.flatMap((id) => patientsByOwner.get(id) ?? []),
       delivered: deliveredByUser.get(candidate.userId) ?? new Set<string>(),
     });
 

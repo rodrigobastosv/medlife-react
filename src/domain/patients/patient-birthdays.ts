@@ -26,6 +26,20 @@ export interface PatientBirthday {
 }
 
 /**
+ * The age a birthday completes in `year`, or `null` when the birth date is in
+ * the future.
+ *
+ * Exported because the agenda asks the same question of a range of days rather
+ * than of a month, and "faz −2 anos" has to be impossible in both places — a
+ * future birth date is a typo, and a second copy of this subtraction is a second
+ * place for that typo to escape through.
+ */
+export function turningAgeIn(birthDate: Date, year: number): number | null {
+  const age = year - birthDate.getFullYear();
+  return age < 0 ? null : age;
+}
+
+/**
  * The patients whose birthday falls in `month`, earliest day first.
  *
  * **Only the month and the day are compared.** The year in a birth date is the
@@ -64,12 +78,10 @@ export function birthdaysInMonth(
     if (birthDate === null) continue;
     if (birthDate.getMonth() !== monthIndex) continue;
 
-    const turningAge = year - birthDate.getFullYear();
-
     birthdays.push({
       patient,
       day: birthDate.getDate(),
-      turningAge: turningAge < 0 ? null : turningAge,
+      turningAge: turningAgeIn(birthDate, year),
     });
   }
 

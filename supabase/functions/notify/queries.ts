@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import type { Appointment, NotificationPreferences, UserRole } from './plan.ts';
+import type { Appointment, NotificationPreferences, PatientRecord, UserRole } from './plan.ts';
 
 /**
  * Everything this function reads and writes, in one place.
@@ -59,8 +59,8 @@ export async function fetchCandidates(db: SupabaseClient): Promise<Candidate[]> 
     .eq('push_enabled', true)
     .or(
       'daily_agenda_enabled.eq.true,recalls_enabled.eq.true,' +
-        'new_appointment_enabled.eq.true,upcoming_visit_enabled.eq.true,' +
-        'follow_ups_enabled.eq.true',
+        'birthdays_enabled.eq.true,new_appointment_enabled.eq.true,' +
+        'upcoming_visit_enabled.eq.true,follow_ups_enabled.eq.true',
     );
 
   if (error !== null) throw new Error(`preferências: ${error.message}`);
@@ -120,6 +120,8 @@ export async function fetchCandidates(db: SupabaseClient): Promise<Candidate[]> 
           dailyAgendaTime: trimTime(row.daily_agenda_time as string | null, '07:30'),
           recallsEnabled: row.recalls_enabled === true,
           recallsTime: trimTime(row.recalls_time as string | null, '09:00'),
+          birthdaysEnabled: row.birthdays_enabled === true,
+          birthdaysTime: trimTime(row.birthdays_time as string | null, '09:00'),
           newAppointmentEnabled: row.new_appointment_enabled === true,
           upcomingVisitEnabled: row.upcoming_visit_enabled === true,
           upcomingLeadMinutes: (row.upcoming_lead_minutes as number | null) ?? 30,
@@ -211,6 +213,48 @@ export async function fetchAppointments(
       (foreignResult.data ?? []).filter((row) => row.created_by !== row.owner_id),
     ),
   };
+}
+
+/**
+ * Every patient of these owners who has a birth date, for the birthday digest.
+ *
+ * **Whose birthday is today is decided in `plan.ts`, not here**, and that is not
+ * laziness: PostgREST compares a column to a literal, and "the month and day of
+ * `birth_date` equal the month and day of today" is an expression over the
+ * column rather than a filter on it. Expressing it would mean an RPC and an
+ * expression index for a read that happens at most once a day per user. The
+ * register of a clinic is thousands of rows at the outside, and the caller only
+ * asks for it on the run that is actually going to send something — see
+ * `isBirthdayDigestDue`.
+ *
+ * The rows are also the *right* thing to hand the planner: the leap-day rule
+ * needs to see 29 February to decide what to do with it, which a query filtered
+ * to today's date could never show it.
+ */
+export async function fetchPatientsWithBirthDate(
+  db: SupabaseClient,
+  ownerIds: readonly string[],
+): Promise<Map<string, PatientRecord[]>> {
+  const { data, error } = await db
+    .from('patients')
+    .select('id, owner_id, full_name, birth_date')
+    .in('owner_id', ownerIds)
+    .not('birth_date', 'is', null);
+
+  if (error !== null) throw new Error(`pacientes: ${error.message}`);
+
+  const byOwner = new Map<string, PatientRecord[]>();
+  for (const row of data ?? []) {
+    const ownerId = row.owner_id as string;
+    const list = byOwner.get(ownerId) ?? [];
+    list.push({
+      id: row.id as string,
+      fullName: (row.full_name as string | null) ?? null,
+      birthDate: row.birth_date as string,
+    });
+    byOwner.set(ownerId, list);
+  }
+  return byOwner;
 }
 
 /** Keys already sent, for the users in this run. */
