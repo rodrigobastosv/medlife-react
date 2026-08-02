@@ -61,7 +61,16 @@
   --ml-on-error: #ffffff;
   --ml-error-container: #ffdad6;
   --ml-on-error-container: #410002;
+
+  /* Violet marks a *return* on the agenda. It arrived as a bare accent with no
+     container beside it, which was fine while it was only ever a 6px dot — but
+     a dot carries no text. The moment the same colour had to label something in
+     a list, the accent-on-surface pairing the other tones avoid measured 4.0:1
+     against `surface-container`, under the 4.5:1 a 12px label needs. So violet
+     now has the container/ink pair every other tone has. */
   --ml-violet: #7a5af5;
+  --ml-violet-container: #e4ddfd;
+  --ml-on-violet-container: #27155e;
 }
 
 .dark {
@@ -96,7 +105,10 @@
   --ml-on-error: #ffffff;
   --ml-error-container: #93000a;
   --ml-on-error-container: #ffdad6;
+
   --ml-violet: #7a5af5;
+  --ml-violet-container: #3b2a80;
+  --ml-on-violet-container: #e4ddfd;
 }
 
 @theme inline {
@@ -127,6 +139,8 @@
   --color-error-container: var(--ml-error-container);
   --color-on-error-container: var(--ml-on-error-container);
   --color-violet: var(--ml-violet);
+  --color-violet-container: var(--ml-violet-container);
+  --color-on-violet-container: var(--ml-on-violet-container);
 
   /* MLRadius */
   --radius-s: 8px;
@@ -144,6 +158,15 @@
 @layer base {
   body {
     @apply bg-surface text-on-surface font-sans antialiased;
+  }
+
+  /* The summary tiles on Início link to the sections further down the same
+     page. Landing there with no transit is indistinguishable from a navigation
+     — the screen simply changes — so the scroll is animated to show that the
+     page moved rather than that a new one arrived. The reduced-motion block at
+     the bottom of this file turns it back off. */
+  html {
+    scroll-behavior: smooth;
   }
 
   /* Headings are Poppins by default, so no component has to remember. */

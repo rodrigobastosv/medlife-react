@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import { DoctorSwitcher } from '@/app/layout/doctor-switcher';
@@ -30,6 +30,32 @@ import {
  */
 export function AppShell() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDialogElement>(null);
+
+  // The same bridge `ConfirmDialog` and `PatientPickerDialog` use: `<dialog>`'s
+  // modal behaviour lives in a method, not an attribute.
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    if (drawer === null) return;
+    if (isDrawerOpen && !drawer.open) drawer.showModal();
+    if (!isDrawerOpen && drawer.open) drawer.close();
+  }, [isDrawerOpen]);
+
+  // The one thing CSS cannot do here. Everywhere else in this file the `lg:`
+  // prefix decides the layout and no JavaScript watches the viewport — but a
+  // modal dialog is in the browser's *top layer*, and hiding it with
+  // `display: none` at `lg` would leave the page behind it inert with nothing on
+  // screen to dismiss. So the drawer is dismissed when the sidebar takes over,
+  // which is what a user who widened the window means anyway.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 64rem)');
+    const close = () => {
+      if (wide.matches) setIsDrawerOpen(false);
+    };
+    close();
+    wide.addEventListener('change', close);
+    return () => wide.removeEventListener('change', close);
+  }, []);
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -55,19 +81,32 @@ export function AppShell() {
         <span className="font-display text-primary font-bold">MedLife</span>
       </header>
 
-      {isDrawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            type="button"
-            aria-label="Fechar menu"
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setIsDrawerOpen(false)}
-          />
-          <div className="bg-surface absolute inset-y-0 left-0 flex w-64 flex-col">
-            <SidebarContent onNavigate={() => setIsDrawerOpen(false)} />
-          </div>
-        </div>
-      )}
+      {/* A native `<dialog>`, for the reasons written up in `ConfirmDialog`:
+          focus moves in, focus is *trapped*, Escape closes, and the page behind
+          goes inert. This was the one overlay in the app that was a plain
+          `<div>` — so it was also the one a keyboard user could tab straight
+          out of, into a page they could not see, with no way to close it.
+
+          The UA stylesheet centres a dialog and gives it a border, a padding and
+          a max-width; `m-0 mr-auto` pins it to the left edge instead, and
+          `open:flex` is what makes it a column only while it is open — a closed
+          dialog must keep its `display: none`. */}
+      <dialog
+        ref={drawerRef}
+        aria-label="Menu"
+        onCancel={(event) => {
+          event.preventDefault();
+          setIsDrawerOpen(false);
+        }}
+        // A click on the ::backdrop is reported against the dialog element
+        // itself, which is how the panel closes when you tap beside it.
+        onClick={(event) => {
+          if (event.target === drawerRef.current) setIsDrawerOpen(false);
+        }}
+        className="bg-surface text-on-surface m-0 mr-auto h-dvh max-h-none w-64 max-w-none flex-col p-0 backdrop:bg-black/40 open:flex"
+      >
+        <SidebarContent onNavigate={() => setIsDrawerOpen(false)} />
+      </dialog>
 
       {/* `min-w-0` is the fix for the classic flex overflow: a flex child's
           default `min-width: auto` refuses to shrink below its content, so one

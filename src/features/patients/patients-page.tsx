@@ -161,7 +161,13 @@ function PatientTile({ patient }: { patient: Patient }) {
   return (
     <Link
       to={routes.patient(patient.id)}
-      className="bg-surface-container hover:bg-primary-container/50 flex items-center gap-4 rounded-l p-4 transition-colors"
+      // The same surface and the same hover as `AppointmentTile`, which is the
+      // other top-level row in the app. This one used to be an unbordered
+      // `surface-container` that hovered to `primary-container/50` — a change of
+      // hue, which `CardButton` documents as reading like a selection rather
+      // than like a pointer passing over something. Stepping one surface level
+      // says "this is under the cursor" and nothing more.
+      className="bg-surface-container-low border-outline/70 hover:bg-surface-container-high flex items-center gap-4 rounded-l border p-4 transition-colors active:scale-[0.995]"
     >
       <span
         aria-hidden

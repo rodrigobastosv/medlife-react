@@ -42,7 +42,14 @@ export function PageHeader({
             title of their record, and a single clipped line ("Maria Aparecida
             dos S…") with no tooltip loses the part that tells two siblings
             apart. Two lines fit almost every name; `title` covers the rest. */}
-        <h1 className="font-display line-clamp-2 text-3xl font-bold tracking-tight" title={title}>
+        {/* The size steps up once there is room for it. At a flat 3xl the title
+            was exactly the size of the patient-count figure beside it on Início,
+            so the page opened with two things competing to be read first and no
+            answer about which came first. */}
+        <h1
+          className="font-display line-clamp-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl"
+          title={title}
+        >
           {title}
         </h1>
         {subtitle !== undefined && (
@@ -56,18 +63,28 @@ export function PageHeader({
 
 /** A titled block inside a page. */
 export function Section({
+  id,
   title,
   actions,
   children,
   className,
 }: {
+  /**
+   * An anchor target, when something higher up the page links down to this
+   * section. `scroll-mt` keeps the heading clear of the sticky top bar on
+   * narrow viewports, which would otherwise cover the thing just scrolled to.
+   */
+  id?: string;
   title: string;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cn('flex flex-col gap-3', className)}>
+    <section
+      {...(id === undefined ? {} : { id })}
+      className={cn('flex scroll-mt-20 flex-col gap-3', className)}
+    >
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-lg font-semibold">{title}</h2>
         {actions}

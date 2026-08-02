@@ -282,6 +282,9 @@ export function Specimens() {
           <Tag tone="warning">Não compareceu</Tag>
           <Tag tone="error">Cancelada</Tag>
           <Tag tone="neutral">Recall em 03/08/2026</Tag>
+          {/* As usadas pela agenda, na mesma cor do ponto no calendário. */}
+          <Tag tone="violet">Retorno em 12/08/2026</Tag>
+          <Tag tone="secondary">Aniversário</Tag>
         </div>
       </section>
     </div>

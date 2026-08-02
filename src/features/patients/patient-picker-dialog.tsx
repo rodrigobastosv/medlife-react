@@ -76,7 +76,12 @@ export function PatientPickerDialog({
         event.preventDefault();
         onCancel();
       }}
-      className="bg-surface text-on-surface m-auto flex max-h-[min(32rem,calc(100dvh-2rem))] w-[min(32rem,calc(100vw-2rem))] flex-col rounded-l p-6 backdrop:bg-black/40"
+      // `open:flex`, not a bare `flex`. A closed `<dialog>` is hidden by the UA
+      // stylesheet's `display: none`, and a `display` utility on the element
+      // overrides it unconditionally — so the picker rendered its heading, its
+      // search field and the whole patient list into the bottom of the agenda
+      // page whenever it was shut.
+      className="bg-surface text-on-surface m-auto max-h-[min(32rem,calc(100dvh-2rem))] w-[min(32rem,calc(100vw-2rem))] flex-col rounded-l p-6 backdrop:bg-black/40 open:flex"
     >
       <h2 className="font-display text-lg font-bold">{title}</h2>
       {description !== undefined && (

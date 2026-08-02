@@ -15,7 +15,6 @@ import {
 } from '@/features/appointments/use-appointments';
 import { BirthdaysCard } from '@/features/patients/birthdays-card';
 import { usePatientsCountQuery, usePatientsQuery } from '@/features/patients/use-patients';
-import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
 import {
   BellIcon,
@@ -27,6 +26,7 @@ import {
 } from '@/design-system/components/icons';
 import { Page, PageHeader, Section } from '@/design-system/components/page';
 import { Skeleton, SkeletonList } from '@/design-system/components/skeleton';
+import { cn } from '@/design-system/cn';
 
 /**
  * The landing screen: how many patients there are, who needs to be called back,
@@ -73,15 +73,28 @@ export function HomePage() {
       <div className="flex flex-col gap-8">
         <Link
           to={routes.patients}
-          className="bg-primary text-on-primary flex items-center gap-4 rounded-l p-6 transition-[filter] hover:brightness-110"
+          // `color-mix` toward black, not `brightness-110` — the same reasoning
+          // written up in `button-classes.ts`: brightness on a saturated teal
+          // desaturates it and shifts its hue, so the hover read as a different
+          // colour rather than as a darker one. And a press gets the same
+          // acknowledgement every button in the app gives.
+          className="bg-primary text-on-primary flex items-center gap-4 rounded-l p-6 transition-[background-color,transform] duration-150 hover:bg-[color-mix(in_oklab,var(--ml-primary),black_12%)] active:scale-[0.99]"
         >
           <span className="bg-on-primary/20 rounded-full p-2">
             <PeopleIcon className="size-6" />
           </span>
           <span className="flex-1">
-            <span className="font-display block text-3xl font-bold">
-              {patientsCount.data ?? '—'}
-            </span>
+            {/* An em dash is the honest rendering of "not knowable", which is
+                why `Figure` uses one. It is the wrong answer for "hasn't
+                arrived yet": the figure flashed as a dash and then became a
+                number, which reads as the count having changed. */}
+            {patientsCount.isPending ? (
+              <Skeleton className="bg-on-primary/25 my-1 h-8 w-20" />
+            ) : (
+              <span className="font-display nums block text-3xl font-bold">
+                {patientsCount.data ?? '—'}
+              </span>
+            )}
             <span className="text-sm opacity-90">
               {patientsCount.data === 1 ? 'paciente cadastrado' : 'pacientes cadastrados'}
             </span>
@@ -97,26 +110,46 @@ export function HomePage() {
             isDoctor ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-4' : 'grid gap-4 sm:grid-cols-3'
           }
         >
-          <SummaryCard icon={<CalendarIcon />} label="Consultas hoje" value={today.data?.length} />
-          <SummaryCard icon={<BellIcon />} label="Recalls pendentes" value={recalls.data?.length} />
+          <SummaryCard
+            icon={<CalendarIcon />}
+            label="Consultas hoje"
+            value={today.data?.length}
+            isPending={today.isPending}
+            tone="primary"
+            href="#consultas-hoje"
+          />
+          <SummaryCard
+            icon={<BellIcon />}
+            label="Recalls pendentes"
+            value={recalls.data?.length}
+            isPending={recalls.isPending}
+            tone="warning"
+            href="#recalls"
+          />
           {isDoctor && (
             <SummaryCard
               icon={<ChatIcon />}
               label="Acompanhamentos"
               value={followUps.data?.length}
+              isPending={followUps.isPending}
+              tone="success"
+              href="#acompanhamentos"
             />
           )}
           <SummaryCard
             icon={<RepeatIcon />}
             label="Retornos futuros"
             value={returns.data?.length}
+            isPending={returns.isPending}
+            tone="violet"
+            href="#retornos"
           />
         </div>
 
         {/* First, and above the rest: the subtitle promises "seu resumo de hoje",
             and until now the screen answered with totals and future dates. This
             is the only block on it that says what is happening today. */}
-        <Section title="Consultas de hoje">
+        <Section id="consultas-hoje" title="Consultas de hoje">
           <AppointmentList
             isPending={today.isPending}
             error={today.error}
@@ -127,7 +160,7 @@ export function HomePage() {
           />
         </Section>
 
-        <Section title="Recalls pendentes">
+        <Section id="recalls" title="Recalls pendentes">
           <AppointmentList
             isPending={recalls.isPending}
             error={recalls.error}
@@ -139,7 +172,7 @@ export function HomePage() {
         </Section>
 
         {isDoctor && (
-          <Section title="Acompanhamentos pendentes">
+          <Section id="acompanhamentos" title="Acompanhamentos pendentes">
             <AppointmentList
               isPending={followUps.isPending}
               error={followUps.error}
@@ -151,7 +184,7 @@ export function HomePage() {
           </Section>
         )}
 
-        <Section title="Próximos retornos">
+        <Section id="retornos" title="Próximos retornos">
           <AppointmentList
             isPending={returns.isPending}
             error={returns.error}
@@ -177,21 +210,71 @@ export function HomePage() {
   );
 }
 
+/**
+ * The colour a summary tile carries, matched to the agenda's legend: a
+ * consultation is teal, a recall amber, an acompanhamento green, a return
+ * violet. Reusing that mapping is the point — the same four things are dots on
+ * the calendar one screen away, and a reader who learns the colours once should
+ * not have to learn them twice.
+ */
+type SummaryTone = 'primary' | 'warning' | 'success' | 'violet';
+
+const summaryChipClasses: Record<SummaryTone, string> = {
+  primary: 'bg-primary-container text-on-primary-container',
+  warning: 'bg-warning-container text-on-warning-container',
+  // Success has no container in the palette, so it follows the same low-opacity
+  // construction `Tag` documents for this tone.
+  success: 'bg-success/15 text-success',
+  violet: 'bg-violet-container text-on-violet-container',
+};
+
+/**
+ * One figure at the top of the screen, linking to the section that lists it.
+ *
+ * Two things were wrong with the previous version. Every tile was
+ * `primary-container`, stacked directly under a `bg-primary` hero — a wall of
+ * four identical teal blocks in which "3 consultas" and "12 recalls pendentes"
+ * looked equally urgent, which is to say neither did. And none of them was
+ * clickable, although each summarises a list sitting further down the same page.
+ * Now the surface is quiet, the accent lives only in the icon chip, and the tile
+ * takes you to what it counts.
+ */
 function SummaryCard({
   icon,
   label,
   value,
+  isPending,
+  tone,
+  href,
 }: {
   icon: ReactNode;
   label: string;
   value: number | undefined;
+  isPending: boolean;
+  tone: SummaryTone;
+  href: string;
 }) {
   return (
-    <Card className="bg-primary-container text-on-primary-container flex flex-col gap-1">
-      <span>{icon}</span>
-      <span className="font-display text-2xl font-bold">{value ?? '—'}</span>
-      <span className="text-sm">{label}</span>
-    </Card>
+    <a
+      href={href}
+      className="bg-surface-container-low border-outline/70 hover:bg-surface-container-high flex flex-col gap-2 rounded-l border p-4 transition-[background-color,transform] duration-150 active:scale-[0.99] sm:p-6"
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'flex size-9 items-center justify-center rounded-full',
+          summaryChipClasses[tone],
+        )}
+      >
+        {icon}
+      </span>
+      {isPending ? (
+        <Skeleton className="my-1 h-6 w-10" />
+      ) : (
+        <span className="font-display nums text-2xl font-bold">{value ?? '—'}</span>
+      )}
+      <span className="text-on-surface-variant text-sm">{label}</span>
+    </a>
   );
 }
 

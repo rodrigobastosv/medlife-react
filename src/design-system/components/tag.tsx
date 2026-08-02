@@ -11,11 +11,18 @@ import { cn } from '@/design-system/cn';
  * accent itself measures under 2:1 for the warning tone, which is unreadable in
  * exactly the place a warning most needs to be read.
  */
-export type TagTone = 'neutral' | 'primary' | 'success' | 'warning' | 'error';
+export type TagTone =
+  'neutral' | 'primary' | 'secondary' | 'violet' | 'success' | 'warning' | 'error';
 
 const toneClasses: Record<TagTone, string> = {
   neutral: 'bg-surface-container text-on-surface-variant',
   primary: 'bg-primary-container text-on-primary-container',
+  // `secondary` and `violet` exist so the agenda can label an event in the same
+  // colour its dot has on the calendar above. Both follow the container rule
+  // rather than tinting the accent: coral and violet are the two lightest
+  // accents in the palette and are the ones that fail hardest as ink.
+  secondary: 'bg-secondary-container text-on-secondary-container',
+  violet: 'bg-violet-container text-on-violet-container',
   // Success has no container token in the palette, so it is built from the
   // accent at low opacity over the surface, with the accent itself as ink —
   // safe here because `success` is dark enough in both themes.

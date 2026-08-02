@@ -28,7 +28,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'bg-surface-container flex flex-col items-center gap-2 rounded-l px-6 py-10 text-center',
+        // Card's treatment — `surface-container-low` behind a hairline — because
+        // an empty state stands in the slot a list of tiles would have filled,
+        // and those tiles are bordered. Rendering it as a flat, borderless well
+        // made the page look like it had changed shape rather than come back
+        // empty.
+        'bg-surface-container-low border-outline/70 flex flex-col items-center gap-2 rounded-l border px-6 py-10 text-center',
         className,
       )}
     >

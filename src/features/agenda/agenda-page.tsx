@@ -157,7 +157,10 @@ export function AgendaPage() {
             // screen reader nothing about which one it has landed in.
             <ul aria-label="Eventos do dia" className="flex flex-col gap-3">
               {selectedEvents.map((event) => (
-                <li key={agendaEventKey(event)} className="flex flex-col gap-1">
+                <li
+                  key={agendaEventKey(event)}
+                  className={`flex flex-col gap-1.5 border-l-4 pl-3 ${railClasses[event.type]}`}
+                >
                   <Tag
                     tone={tagTones[event.type]}
                     icon={event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined}
@@ -244,15 +247,43 @@ const dotClasses: Record<AgendaEventType, string> = {
   birthday: 'bg-secondary',
 };
 
+/**
+ * One tone per type, and the *same* colour the type's dot has above.
+ *
+ * Two of these used to be `neutral`, which quietly broke the legend: the
+ * calendar teaches five colours, and a reader who learned "violet means a
+ * return" then scrolled to a list that rendered returns in grey had been taught
+ * a language the page only half spoke.
+ *
+ * The reason they were neutral was a fear of five saturated labels competing in
+ * one day's list. That fear was aimed at the wrong thing — every tone here is a
+ * *container* colour, a pale wash behind dark ink, not the accent itself. Five
+ * of those in a column read as five quiet labels, which is what they are.
+ */
 const tagTones: Record<AgendaEventType, TagTone> = {
   consultation: 'primary',
-  return: 'neutral',
+  return: 'violet',
   recall: 'warning',
-  // Green for the doctor's own call, matching its dot. The birthday keeps the
-  // quiet tag and earns its distinction from the cake icon instead — five
-  // saturated labels in one day's list would make none of them stand out.
   followUp: 'success',
-  birthday: 'neutral',
+  birthday: 'secondary',
+};
+
+/**
+ * The left rail on a day's row, in the event's colour.
+ *
+ * It exists because the type tag used to float in the gutter above its card —
+ * left-aligned to the row while the card's own content began 16px further in,
+ * so the label read as loose furniture rather than as belonging to the thing
+ * below it. The rail binds the two into one block and carries the legend's
+ * colour a second time, which is what makes a day's list scannable by hue
+ * before any of it is read.
+ */
+const railClasses: Record<AgendaEventType, string> = {
+  consultation: 'border-primary',
+  return: 'border-violet',
+  recall: 'border-warning',
+  followUp: 'border-success',
+  birthday: 'border-secondary',
 };
 
 const distinctTypes = (events: readonly AgendaEvent[]): AgendaEventType[] => [
