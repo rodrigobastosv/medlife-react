@@ -34,6 +34,7 @@ export const routes = {
     `/patients/${patientId}/appointments/${appointmentId}/edit`,
   secretaries: '/secretaries',
   settings: '/settings',
+  availability: '/settings/availability',
   signIn: '/auth/sign-in',
   signUp: '/auth/sign-up',
 } as const;

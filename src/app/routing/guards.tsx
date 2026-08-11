@@ -70,7 +70,7 @@ export function RequireActiveDoctor() {
 }
 
 /**
- * Doctor-only screens (reports, secretaries).
+ * Doctor-only screens (reports, secretaries, availability).
  *
  * The sidebar already hides these links, so reaching this guard means a typed
  * URL or an old bookmark. It sends the user home rather than showing a refusal:

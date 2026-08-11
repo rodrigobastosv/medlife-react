@@ -62,6 +62,10 @@ export const queryKeys = {
   secretaries: {
     all: (doctorId: string) => ['secretaries', doctorId] as const,
   },
+  availability: {
+    rules: (ownerId: string) => ['availability', ownerId, 'rules'] as const,
+    exceptions: (ownerId: string) => ['availability', ownerId, 'exceptions'] as const,
+  },
   notifications: {
     /**
      * Whether *this browser* is registered to receive push.
