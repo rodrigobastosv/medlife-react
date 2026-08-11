@@ -14,6 +14,11 @@ import {
   type Weekday,
 } from '@/domain/agenda/availability';
 import {
+  APPOINTMENT_LOCATIONS,
+  appointmentLocationLabel,
+  type AppointmentLocation,
+} from '@/domain/appointments/appointment-enums';
+import {
   useAvailabilityExceptionsQuery,
   useAvailabilityRulesQuery,
   useDeleteAvailabilityExceptionMutation,
@@ -34,6 +39,11 @@ const SLOT_DURATION_MINUTES = [15, 20, 30, 40, 45, 60] as const;
 
 /** What a weekday defaults to the moment its switch is turned on. */
 const DEFAULT_RULE_HOURS = { startTime: '08:00', endTime: '18:00', slotDurationMinutes: 30 };
+
+const locationOptions = APPOINTMENT_LOCATIONS.map((value) => ({
+  value,
+  label: appointmentLocationLabel[value],
+}));
 
 export function AvailabilityPage() {
   return (
@@ -61,50 +71,104 @@ function WeeklyHoursCard() {
   const saveMutation = useSaveAvailabilityRuleMutation();
   const deleteMutation = useDeleteAvailabilityRuleMutation();
 
+  // One location's week at a time, rather than six weeks stacked. Forty-two
+  // switches on one screen is not a list anyone reads, and the question being
+  // answered here really is one place at a time: "quais dias eu atendo na
+  // Oncovie". The summary below the picker is what keeps the other locations
+  // from disappearing along with their rows.
+  const [location, setLocation] = useState<AppointmentLocation>('oncovie');
+
   const onError = (error: unknown) => showToast({ tone: 'error', message: messageOf(error) });
 
   // Keyed by weekday for the O(1) lookup each row below needs — the query
-  // itself has no reason to return more than one rule per weekday (the
-  // migration's unique index guarantees it), but a `Map` is still the
-  // correct shape for "look this up by weekday" rather than filtering the
-  // array seven times.
+  // itself has no reason to return more than one rule per weekday *for this
+  // location* (the migration's unique index guarantees it), but a `Map` is
+  // still the correct shape for "look this up by weekday" rather than
+  // filtering the array seven times.
   const rulesByWeekday = new Map<Weekday, AvailabilityRule>();
-  for (const rule of rulesQuery.data ?? []) rulesByWeekday.set(rule.weekday, rule);
+  for (const rule of rulesQuery.data ?? []) {
+    if (rule.location === location) rulesByWeekday.set(rule.weekday, rule);
+  }
 
   return (
     <Card className="flex flex-col gap-1">
       <CardTitle>Horário semanal</CardTitle>
       <p className="text-on-surface-variant mb-2 text-sm">
-        Os dias em que você atende. Um dia desligado fica sem vagas na agenda.
+        Os dias em que você atende, por local. Consultório e atendimento domiciliar costumam ter
+        dias e durações diferentes — declare cada um no seu próprio local.
       </p>
+
+      <SelectField
+        label="Local"
+        className="mb-2"
+        value={location}
+        onChange={(event) => setLocation(event.target.value as AppointmentLocation)}
+        options={locationOptions}
+      />
 
       {rulesQuery.isPending ? (
         <p className="text-on-surface-variant text-sm">Carregando…</p>
       ) : rulesQuery.isError ? (
         <p className="text-error text-sm">{messageOf(rulesQuery.error)}</p>
       ) : (
-        WEEKDAYS.map((weekday) => (
-          <WeekdayRow
-            key={weekday}
-            weekday={weekday}
-            rule={rulesByWeekday.get(weekday)}
-            isBusy={saveMutation.isPending || deleteMutation.isPending}
-            onSave={(draft) => saveMutation.mutate(draft, { onError })}
-            onDelete={() => deleteMutation.mutate(weekday, { onError })}
-          />
-        ))
+        <>
+          {WEEKDAYS.map((weekday) => (
+            <WeekdayRow
+              key={weekday}
+              location={location}
+              weekday={weekday}
+              rule={rulesByWeekday.get(weekday)}
+              isBusy={saveMutation.isPending || deleteMutation.isPending}
+              onSave={(draft) => saveMutation.mutate(draft, { onError })}
+              onDelete={() => deleteMutation.mutate({ location, weekday }, { onError })}
+            />
+          ))}
+          <DeclaredLocationsSummary rules={rulesQuery.data} />
+        </>
       )}
     </Card>
   );
 }
 
+/**
+ * "Oncovie · 2 dias · Domicílio · 4 dias" — what is declared *everywhere*, not
+ * just at the location on screen.
+ *
+ * Without it the picker hides its own contents: switching to a location with no
+ * rules shows seven blank rows, which looks identical to having lost the ones
+ * declared somewhere else. This line is how the doctor sees that her home
+ * visits are still there while she is looking at the clinic.
+ */
+function DeclaredLocationsSummary({ rules }: { rules: readonly AvailabilityRule[] }) {
+  const counts = APPOINTMENT_LOCATIONS.map((location) => ({
+    location,
+    days: rules.filter((rule) => rule.location === location).length,
+  })).filter((entry) => entry.days > 0);
+
+  if (counts.length === 0) return null;
+
+  return (
+    <p className="text-on-surface-variant border-outline/70 mt-3 border-t pt-3 text-sm">
+      Declarado:{' '}
+      {counts
+        .map(
+          ({ location, days }) =>
+            `${appointmentLocationLabel[location]} (${days} ${days === 1 ? 'dia' : 'dias'})`,
+        )
+        .join(' · ')}
+    </p>
+  );
+}
+
 function WeekdayRow({
+  location,
   weekday,
   rule,
   isBusy,
   onSave,
   onDelete,
 }: {
+  location: AppointmentLocation;
   weekday: Weekday;
   rule: AvailabilityRule | undefined;
   isBusy: boolean;
@@ -112,14 +176,15 @@ function WeekdayRow({
   onDelete: () => void;
 }) {
   const isOn = rule !== undefined;
-  // Explicit rather than `rule ?? { weekday, ...DEFAULT_RULE_HOURS }`: `rule`
-  // also carries an `id` that `AvailabilityRuleDraft` has no field for, and
-  // spelling out exactly the four fields the draft needs keeps that true by
+  // Explicit rather than `rule ?? { location, weekday, ...DEFAULT_RULE_HOURS }`:
+  // `rule` also carries an `id` that `AvailabilityRuleDraft` has no field for,
+  // and spelling out exactly the five fields the draft needs keeps that true by
   // construction instead of by an excess property nobody asked to remove.
   const hours: AvailabilityRuleDraft =
     rule === undefined
-      ? { weekday, ...DEFAULT_RULE_HOURS }
+      ? { location, weekday, ...DEFAULT_RULE_HOURS }
       : {
+          location: rule.location,
           weekday: rule.weekday,
           startTime: rule.startTime,
           endTime: rule.endTime,
@@ -132,7 +197,9 @@ function WeekdayRow({
         label={weekdayLabel[weekday]}
         isOn={isOn}
         isDisabled={isBusy}
-        onToggle={(next) => (next ? onSave({ weekday, ...DEFAULT_RULE_HOURS }) : onDelete())}
+        onToggle={(next) =>
+          next ? onSave({ location, weekday, ...DEFAULT_RULE_HOURS }) : onDelete()
+        }
       />
       {isOn && (
         <div className="grid grid-cols-2 gap-3 px-4 pt-1 pb-3 sm:grid-cols-3">
@@ -183,7 +250,8 @@ function ExceptionsCard() {
     <Card className="flex flex-col gap-3">
       <CardTitle>Exceções</CardTitle>
       <p className="text-on-surface-variant text-sm">
-        Feriados, dias sem atendimento ou com horário diferente do padrão semanal.
+        Feriados, dias sem atendimento ou com horário diferente do padrão semanal. Um feriado vale
+        para todos os locais; um horário especial pode valer só para um.
       </p>
 
       {exceptionsQuery.isPending ? (
@@ -205,6 +273,10 @@ function ExceptionsCard() {
                   {exception.isClosed
                     ? 'Fechado'
                     : `Horário especial: ${exception.startTime} – ${exception.endTime}`}
+                  {' · '}
+                  {exception.location === null
+                    ? 'Todos os locais'
+                    : appointmentLocationLabel[exception.location]}
                   {exception.note !== null && ` · ${exception.note}`}
                 </p>
               </div>
@@ -261,6 +333,11 @@ function AddExceptionForm({
   onSubmit: (draft: AvailabilityExceptionDraft) => void;
 }) {
   const [date, setDate] = useState('');
+  // `''` is the "todos os locais" entry, which becomes `null` on submit. It is
+  // the default because the common exception is a holiday, and a holiday that
+  // closed only one of six locations would leave the doctor bookable on a day
+  // she is not working at all.
+  const [location, setLocation] = useState<AppointmentLocation | ''>('');
   const [isClosed, setIsClosed] = useState(true);
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('18:00');
@@ -277,16 +354,19 @@ function AddExceptionForm({
         if (!canSubmit) return;
         onSubmit({
           date: fromDateColumn(date),
+          location: location === '' ? null : location,
           isClosed,
           startTime: isClosed ? null : startTime,
           endTime: isClosed ? null : endTime,
           slotDurationMinutes: isClosed ? null : slotDurationMinutes,
           note: note === '' ? null : note,
         });
-        // The date is not remembered: two exceptions on the same day would
-        // upsert into the same row anyway (see the migration's unique index),
-        // so a form that stayed filled in would invite editing the one just
-        // added rather than adding a new one.
+        // The date is not remembered: two exceptions on the same day *and
+        // location* would upsert into the same row anyway (see the migration's
+        // unique index), so a form that stayed filled in would invite editing
+        // the one just added rather than adding a new one. The location is
+        // deliberately kept — declaring a run of special days at one place is
+        // the case where re-picking it every time would be the annoyance.
         setDate('');
         setNote('');
       }}
@@ -299,12 +379,19 @@ function AddExceptionForm({
           onChange={(event) => setDate(event.target.value)}
           required
         />
+        <SelectField
+          label="Local"
+          placeholder="Todos os locais"
+          value={location}
+          onChange={(event) => setLocation(event.target.value as AppointmentLocation | '')}
+          options={locationOptions}
+        />
         <Switch
           label="Dia fechado"
           description="Sem atendimento nesta data."
           isOn={isClosed}
           onToggle={setIsClosed}
-          className="px-0"
+          className="px-0 sm:col-span-2"
         />
       </div>
 

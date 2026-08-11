@@ -15,6 +15,7 @@ import {
   type AvailabilityRuleRow,
   type Weekday,
 } from '@/domain/agenda/availability';
+import type { AppointmentLocation } from '@/domain/appointments/appointment-enums';
 
 interface Scope {
   ownerId: string;
@@ -25,6 +26,9 @@ export async function fetchAvailabilityRules(scope: Scope): Promise<Availability
     .from(Table.availabilityRules)
     .select()
     .eq('owner_id', scope.ownerId)
+    // Location first: the settings screen groups the week under each place she
+    // works, so this is the order it renders in and it does not have to sort.
+    .order('location', { ascending: true })
     .order('weekday', { ascending: true })
     .overrideTypes<AvailabilityRuleRow[], { merge: false }>();
 
@@ -35,12 +39,14 @@ export async function fetchAvailabilityRules(scope: Scope): Promise<Availability
 }
 
 /**
- * Upserts one weekday's hours.
+ * Upserts one weekday's hours at one location.
  *
- * `onConflict` targets the unique `(owner_id, weekday)` index from the
- * migration — the row it enforces exists at most once is the row this always
- * writes to, so the settings screen never has to know whether a given weekday
- * is being created or edited.
+ * `onConflict` targets the unique `(owner_id, location, weekday)` index from
+ * `011_availability_by_location.sql` — the row it enforces exists at most once
+ * is the row this always writes to, so the settings screen never has to know
+ * whether a given weekday is being created or edited. The location is part of
+ * that key: without it, declaring home visits on Tuesday would overwrite the
+ * clinic's Tuesday instead of sitting beside it.
  */
 export async function saveAvailabilityRule(
   scope: Scope,
@@ -50,7 +56,7 @@ export async function saveAvailabilityRule(
     .from(Table.availabilityRules)
     .upsert(
       { owner_id: scope.ownerId, ...availabilityRuleDraftToColumns(draft) },
-      { onConflict: 'owner_id,weekday' },
+      { onConflict: 'owner_id,location,weekday' },
     )
     .select()
     .single<AvailabilityRuleRow>();
@@ -59,12 +65,16 @@ export async function saveAvailabilityRule(
   return toAvailabilityRule(data);
 }
 
-export async function deleteAvailabilityRule(scope: Scope, weekday: Weekday): Promise<void> {
+export async function deleteAvailabilityRule(
+  scope: Scope,
+  target: { location: AppointmentLocation; weekday: Weekday },
+): Promise<void> {
   const { error } = await supabase
     .from(Table.availabilityRules)
     .delete()
     .eq('owner_id', scope.ownerId)
-    .eq('weekday', weekday);
+    .eq('location', target.location)
+    .eq('weekday', target.weekday);
 
   if (error !== null) throw new AppError('Não foi possível remover o horário', error);
 }
@@ -89,7 +99,15 @@ export async function fetchAvailabilityExceptions(scope: Scope): Promise<Availab
   return data.map(toAvailabilityException);
 }
 
-/** Upserts on `(owner_id, exception_date)`, same reasoning as the weekly rule. */
+/**
+ * Upserts on `(owner_id, exception_date, location)`, same reasoning as the
+ * weekly rule.
+ *
+ * A null location — "todos os locais", the holiday case — is a real value in
+ * that key rather than a missing one, which is why the index behind it is
+ * declared `nulls not distinct`. Without that, every save of the same holiday
+ * would insert another row instead of editing the one already there.
+ */
 export async function saveAvailabilityException(
   scope: Scope,
   draft: AvailabilityExceptionDraft,
@@ -98,7 +116,7 @@ export async function saveAvailabilityException(
     .from(Table.availabilityExceptions)
     .upsert(
       { owner_id: scope.ownerId, ...availabilityExceptionDraftToColumns(draft) },
-      { onConflict: 'owner_id,exception_date' },
+      { onConflict: 'owner_id,exception_date,location' },
     )
     .select()
     .single<AvailabilityExceptionRow>();

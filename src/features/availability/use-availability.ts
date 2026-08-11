@@ -14,6 +14,7 @@ import type {
   AvailabilityRuleDraft,
   Weekday,
 } from '@/domain/agenda/availability';
+import type { AppointmentLocation } from '@/domain/appointments/appointment-enums';
 import { queryKeys } from '@/features/query-keys';
 
 export function useAvailabilityRulesQuery() {
@@ -46,7 +47,8 @@ export function useDeleteAvailabilityRuleMutation() {
   const scope = useDataScope();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (weekday: Weekday) => deleteAvailabilityRule(scope, weekday),
+    mutationFn: (target: { location: AppointmentLocation; weekday: Weekday }) =>
+      deleteAvailabilityRule(scope, target),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.availability.rules(scope.ownerId) }),
   });
