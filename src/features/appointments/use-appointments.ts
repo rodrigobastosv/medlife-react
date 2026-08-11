@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { dateOnly } from '@/core/format';
 import { useDataScope, useSession } from '@/app/providers/session-context';
@@ -58,20 +58,32 @@ export function usePendingFollowUpsQuery() {
 }
 
 /**
- * Today's appointments, for the home screen.
+ * Everything booked on one day, with the patient joined.
  *
- * The day is resolved once here and passed to both the key and the query, so the
- * two cannot disagree — computing it separately in each would, at midnight,
- * cache one day's rows under the next day's key.
+ * The day is resolved once by the caller and passed to both the key and the
+ * query, so the two cannot disagree — computing it separately in each would, at
+ * midnight, cache one day's rows under the next day's key.
+ *
+ * `null` disables the query rather than fetching some default day. The
+ * appointment form asks this about whatever date is typed into it, and a
+ * cleared date field is a real state with no day to ask about; see
+ * `queryKeys.appointments.onDay` for why the key still names that absence.
  */
-export function useTodayAppointmentsQuery() {
+export function useAppointmentsOnDayQuery(day: Date | null) {
   const scope = useDataScope();
-  const today = dateOnly(new Date());
 
   return useQuery({
-    queryKey: queryKeys.appointments.onDay(scope.ownerId, today),
-    queryFn: () => fetchAppointmentsOnDay(scope, today),
+    queryKey: queryKeys.appointments.onDay(scope.ownerId, day),
+    // `skipToken` rather than `enabled: day !== null`, which would leave the
+    // query function holding a `Date | null` it has to cast its way out of.
+    // This way the narrowing is the same thing that disables the query.
+    queryFn: day === null ? skipToken : () => fetchAppointmentsOnDay(scope, day),
   });
+}
+
+/** Today's appointments, for the home screen. */
+export function useTodayAppointmentsQuery() {
+  return useAppointmentsOnDayQuery(dateOnly(new Date()));
 }
 
 export function useUpcomingReturnsQuery() {

@@ -28,6 +28,7 @@ import {
   usePatientAppointmentsQuery,
   useSaveAppointmentMutation,
 } from '@/features/appointments/use-appointments';
+import { useSlotConflicts } from '@/features/appointments/use-slot-conflicts';
 import { BackLink } from '@/features/navigation/back-link';
 import { UnsavedChangesDialog } from '@/features/navigation/unsaved-changes-dialog';
 import { useUnsavedChangesGuard } from '@/features/navigation/use-unsaved-changes-guard';
@@ -36,8 +37,10 @@ import { Button } from '@/design-system/components/button';
 import { Card, CardTitle } from '@/design-system/components/card';
 import { ConfirmDialog } from '@/design-system/components/confirm-dialog';
 import { SelectField, TextAreaField, TextField } from '@/design-system/components/form-fields';
+import { WarningIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { PageSpinner } from '@/design-system/components/spinner';
+import type { SlotConflict } from '@/domain/agenda/slot-conflicts';
 
 /**
  * Dates and the money are strings in the form and typed values in the domain.
@@ -165,6 +168,21 @@ function AppointmentFormView({
   const showInstallments =
     paymentMethod !== '' && supportsInstallments(paymentMethod as (typeof PAYMENT_METHODS)[number]);
 
+  // Three more single-field subscriptions, for the same reason as above: the
+  // double-booking warning depends on the day, the time and the place, and on
+  // nothing else in the form. `watch()` would re-render the whole form — and
+  // re-derive this — on every keystroke in the notes field.
+  const scheduledDate = useWatch({ control, name: 'scheduledDate' });
+  const scheduledTime = useWatch({ control, name: 'scheduledTime' });
+  const location = useWatch({ control, name: 'location' });
+
+  const conflicts = useSlotConflicts({
+    date: scheduledDate,
+    time: scheduledTime,
+    location,
+    ignoreAppointmentId: appointment?.id ?? null,
+  });
+
   const onSubmit = handleSubmit((values) => {
     saveMutation.mutate(toDraft(values, { patientId, canSeeFinances }), {
       onSuccess: () => {
@@ -214,6 +232,7 @@ function AppointmentFormView({
             }
             {...register('scheduledTime')}
           />
+          <SlotConflictWarning conflicts={conflicts} />
           <SelectField
             label="Tipo"
             options={APPOINTMENT_TYPES.map((value) => ({
@@ -366,6 +385,41 @@ function AppointmentFormView({
     </Page>
   );
 }
+
+/**
+ * "Já existe consulta às 09:30 com Maria Souza (Oncovie)."
+ *
+ * Deliberately not an `error` on the time field. The field is not wrong — the
+ * form will save exactly what it says — and rendering this through `error`
+ * would set `aria-invalid`, colour the input red and tell a screen reader the
+ * value must be corrected, none of which is true of an *encaixe*. It is a
+ * `status`, announced politely, so it reaches a screen-reader user when it
+ * appears without interrupting them mid-field.
+ */
+function SlotConflictWarning({ conflicts }: { conflicts: readonly SlotConflict[] }) {
+  const [first] = conflicts;
+  if (first === undefined) return null;
+
+  return (
+    <p
+      role="status"
+      className="rounded-m bg-warning-container text-on-warning-container flex items-start gap-2 px-3 py-2 text-sm sm:col-span-2"
+    >
+      <WarningIcon className="mt-0.5" />
+      <span>
+        {conflicts.length === 1
+          ? `Já existe consulta às ${describeConflict(first)}.`
+          : `Já existem ${conflicts.length} consultas neste horário: ${conflicts
+              .map(describeConflict)
+              .join(', ')}.`}{' '}
+        <span className="opacity-80">Você ainda pode salvar, se for um encaixe.</span>
+      </span>
+    </p>
+  );
+}
+
+const describeConflict = (conflict: SlotConflict): string =>
+  `${conflict.time}${conflict.patientName === null ? '' : ` com ${conflict.patientName}`} (${appointmentLocationLabel[conflict.location]})`;
 
 /** Strictly after today — today itself is a visit that may well have happened. */
 const isFutureDay = (date: Date): boolean => dateOnly(date) > dateOnly(new Date());

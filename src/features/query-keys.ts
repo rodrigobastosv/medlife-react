@@ -47,8 +47,14 @@ export const queryKeys = {
     // The day is in the key so that crossing midnight with the app open is a
     // different query rather than a stale one — the cache cannot know the date
     // moved on its own.
-    onDay: (ownerId: string, day: Date) =>
-      ['appointments', ownerId, 'day', toDateColumn(day)] as const,
+    //
+    // `null` is a real case rather than a convenience: the appointment form asks
+    // this question about whatever day is typed in it, and a cleared date field
+    // has no day. Hooks cannot be conditional, so the key still has to be built;
+    // naming the absence keeps those renders from parking an empty result under
+    // some real day's key and serving it back when that day is next asked for.
+    onDay: (ownerId: string, day: Date | null) =>
+      ['appointments', ownerId, 'day', day === null ? 'none' : toDateColumn(day)] as const,
     returns: (ownerId: string) => ['appointments', ownerId, 'returns'] as const,
     // The month is part of the key: paging the agenda is a different query, not
     // a refetch of the same one — which is what lets the previous month stay
