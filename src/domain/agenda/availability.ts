@@ -1,6 +1,7 @@
 import { dateOnly, fromDateColumn, isSameDay, toDateColumn } from '@/core/format';
 import { toTimeOfDay } from '@/domain/appointments/appointment';
 import {
+  APPOINTMENT_LOCATIONS,
   toAppointmentLocation,
   type AppointmentLocation,
 } from '@/domain/appointments/appointment-enums';
@@ -248,6 +249,39 @@ export function slotDurationOn(
   exceptions: readonly AvailabilityException[],
 ): number | null {
   return openIntervalFor(dateOnly(day), location, rules, exceptions)?.slotDurationMinutes ?? null;
+}
+
+/**
+ * The whole stretch of `day` the doctor works, across every location at once —
+ * `null` when she works nowhere that day.
+ *
+ * The union rather than one location's interval, because this answers a
+ * question about her day and not about a place: a morning at the clinic and an
+ * afternoon of home visits is one working day from 08:00 to 18:00, and the day
+ * timeline that draws it has one axis, not one per location. The gap between
+ * them is a real gap in the day and is exactly what the timeline exists to
+ * show, so it is deliberately *not* subtracted out here.
+ */
+export function workingSpanOn(
+  day: Date,
+  rules: readonly AvailabilityRule[],
+  exceptions: readonly AvailabilityException[],
+): { startMinutes: number; endMinutes: number } | null {
+  const on = dateOnly(day);
+  let startMinutes: number | null = null;
+  let endMinutes: number | null = null;
+
+  for (const location of APPOINTMENT_LOCATIONS) {
+    const interval = openIntervalFor(on, location, rules, exceptions);
+    if (interval === null) continue;
+    const start = timeToMinutes(interval.startTime);
+    const end = timeToMinutes(interval.endTime);
+    if (startMinutes === null || start < startMinutes) startMinutes = start;
+    if (endMinutes === null || end > endMinutes) endMinutes = end;
+  }
+
+  if (startMinutes === null || endMinutes === null) return null;
+  return { startMinutes, endMinutes };
 }
 
 /**

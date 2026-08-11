@@ -15,8 +15,14 @@ import {
   type AgendaEventType,
   type BirthdayAgendaEvent,
 } from '@/domain/agenda/agenda-event';
+import { buildDayTimeline } from '@/domain/agenda/day-timeline';
+import { DayTimelineView } from '@/features/agenda/day-timeline-view';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { agendaRange, useAgendaQuery } from '@/features/appointments/use-appointments';
+import {
+  useAvailabilityExceptionsQuery,
+  useAvailabilityRulesQuery,
+} from '@/features/availability/use-availability';
 import { PatientContactActions } from '@/features/patients/patient-contact-actions';
 import { PatientPickerDialog } from '@/features/patients/patient-picker-dialog';
 import { usePatientsQuery } from '@/features/patients/use-patients';
@@ -24,7 +30,7 @@ import { Button } from '@/design-system/components/button';
 import { Calendar } from '@/design-system/components/calendar';
 import { Card } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
-import { CakeIcon, CalendarIcon, PlusIcon } from '@/design-system/components/icons';
+import { CakeIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { SkeletonList } from '@/design-system/components/skeleton';
 import { Tag, type TagTone } from '@/design-system/components/tag';
@@ -47,9 +53,18 @@ export function AgendaPage() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(() => dateOnly(new Date()));
   const [isPickingPatient, setIsPickingPatient] = useState(false);
+  // The hour an empty stretch of the timeline was clicked at, or null when the
+  // booking started from the button — which chooses a day and leaves the clock
+  // to the form, exactly as it did before there was an axis to click.
+  const [pickedTime, setPickedTime] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const agenda = useAgendaQuery(month);
+  // The declared hours decide the axis and how long each block runs. Both are
+  // the same cache entries the Ajustes screen fills, so arriving from there
+  // costs no request.
+  const rules = useAvailabilityRulesQuery();
+  const exceptions = useAvailabilityExceptionsQuery();
   // The same cache entry Início and Pacientes fill, so arriving here from either
   // costs no extra request. Birthdays cannot come from the agenda query at all:
   // they are a fact about the register, not about anything that was scheduled.
@@ -67,7 +82,25 @@ export function AgendaPage() {
       ]),
     [agenda.data, patients.data, month],
   );
-  const selectedEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
+  // The day's events are read inside the memo rather than into a variable
+  // beside it: `?? []` mints a new array on every render of a day with nothing
+  // on it, which would make the memo recompute exactly on the days it has the
+  // least to do.
+  const timeline = useMemo(
+    () =>
+      buildDayTimeline({
+        day: selectedDay,
+        events: eventsByDay.get(dayKey(selectedDay)) ?? [],
+        rules: rules.data ?? [],
+        exceptions: exceptions.data ?? [],
+      }),
+    [selectedDay, eventsByDay, rules.data, exceptions.data],
+  );
+
+  const startBooking = (time: string | null) => {
+    setPickedTime(time);
+    setIsPickingPatient(true);
+  };
 
   return (
     <Page>
@@ -124,7 +157,7 @@ export function AgendaPage() {
             {/* Scheduling starts from the day you are looking at, which is the
                 whole point of doing it here rather than from the patient's
                 record: the date is already chosen. */}
-            <Button size="sm" icon={<PlusIcon />} onClick={() => setIsPickingPatient(true)}>
+            <Button size="sm" icon={<PlusIcon />} onClick={() => startBooking(null)}>
               Nova consulta
             </Button>
           </div>
@@ -134,7 +167,10 @@ export function AgendaPage() {
               the agenda still has everything that was scheduled, and losing the
               whole screen over a birthday list nobody came here for would be the
               worse trade. */}
-          {agenda.isPending || patients.isPending ? (
+          {/* The availability queries join the wait. Rendering the axis before
+              they land would draw the fallback day and then jump to the
+              declared hours, moving every block under the cursor. */}
+          {agenda.isPending || patients.isPending || rules.isPending || exceptions.isPending ? (
             <SkeletonList rows={2} />
           ) : agenda.isError ? (
             <EmptyState
@@ -143,39 +179,49 @@ export function AgendaPage() {
               actionLabel="Tentar de novo"
               onAction={() => void agenda.refetch()}
             />
-          ) : selectedEvents.length === 0 ? (
-            <EmptyState
-              icon={<CalendarIcon />}
-              title="Nada neste dia"
-              message="Escolha outro dia no calendário — os dias com marcação têm um ponto colorido — ou marque uma consulta para este."
-              actionLabel="Marcar consulta"
-              onAction={() => setIsPickingPatient(true)}
-            />
           ) : (
-            // Named, because it is not the only list on this screen — the
-            // patient picker holds another — and "lista" on its own tells a
-            // screen reader nothing about which one it has landed in.
-            <ul aria-label="Eventos do dia" className="flex flex-col gap-3">
-              {selectedEvents.map((event) => (
-                <li
-                  key={agendaEventKey(event)}
-                  className={`flex flex-col gap-1.5 border-l-4 pl-3 ${railClasses[event.type]}`}
-                >
-                  <Tag
-                    tone={tagTones[event.type]}
-                    icon={event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined}
-                    className="self-start"
-                  >
-                    {agendaEventTypeLabel[event.type]}
-                  </Tag>
-                  {event.type === 'birthday' ? (
-                    <BirthdayTile event={event} />
-                  ) : (
-                    <AppointmentTile appointment={event.appointment} showPatientName />
-                  )}
-                </li>
-              ))}
-            </ul>
+            <>
+              {/* Above the axis, not on it. A recall, a return, a birthday and a
+                  legacy appointment with no `scheduled_time` have no time of
+                  day; dropping them at the top of a clock would draw them as
+                  appointments at midnight, which is a claim the data does not
+                  make. They keep the full rows — a birthday's useful next move
+                  is the contact bar, and that does not fit in a block. */}
+              {timeline.untimed.length > 0 && (
+                // Named, because it is not the only list on this screen — the
+                // patient picker holds another — and "lista" on its own tells a
+                // screen reader nothing about which one it has landed in.
+                <ul aria-label="Sem horário definido" className="flex flex-col gap-3">
+                  {timeline.untimed.map((event) => (
+                    <li
+                      key={agendaEventKey(event)}
+                      className={`flex flex-col gap-1.5 border-l-4 pl-3 ${railClasses[event.type]}`}
+                    >
+                      <Tag
+                        tone={tagTones[event.type]}
+                        icon={
+                          event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined
+                        }
+                        className="self-start"
+                      >
+                        {agendaEventTypeLabel[event.type]}
+                      </Tag>
+                      {event.type === 'birthday' ? (
+                        <BirthdayTile event={event} />
+                      ) : (
+                        <AppointmentTile appointment={event.appointment} showPatientName />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <p className="text-on-surface-variant text-sm">
+                Clique em um horário livre para marcar uma consulta nele.
+              </p>
+
+              <DayTimelineView timeline={timeline} onPickSlot={(time) => startBooking(time)} />
+            </>
           )}
         </section>
       </div>
@@ -183,13 +229,18 @@ export function AgendaPage() {
       <PatientPickerDialog
         open={isPickingPatient}
         title="Nova consulta"
-        description={`Para quem é a consulta de ${formatDate(selectedDay)}?`}
+        description={
+          pickedTime === null
+            ? `Para quem é a consulta de ${formatDate(selectedDay)}?`
+            : `Para quem é a consulta de ${formatDate(selectedDay)} às ${pickedTime}?`
+        }
         onCancel={() => setIsPickingPatient(false)}
-        // The dialog only answers "who?"; the date it is being scheduled for is
-        // this page's state, and the two meet in the URL of the form.
+        // The dialog only answers "who?"; the day and the hour it is being
+        // scheduled for are this page's state, and the three meet in the URL of
+        // the form.
         onSelect={(patient) => {
           setIsPickingPatient(false);
-          void navigate(routes.newAppointment(patient.id, selectedDay));
+          void navigate(routes.newAppointment(patient.id, selectedDay, pickedTime ?? undefined));
         }}
       />
     </Page>

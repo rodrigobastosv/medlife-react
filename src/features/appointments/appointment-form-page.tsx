@@ -103,8 +103,10 @@ export function AppointmentFormPage() {
       patientName={patient.data?.fullName ?? 'Paciente'}
       appointment={existing}
       // Only meaningful when creating: an existing appointment carries its own
-      // date, and a `?on=` left in the URL must not overwrite it.
+      // date and time, and an `?on=` or `?at=` left in the URL must not
+      // overwrite either.
       initialDate={existing === undefined ? parseDateParam(searchParams.get('on')) : undefined}
+      initialTime={existing === undefined ? parseTimeParam(searchParams.get('at')) : undefined}
     />
   );
 }
@@ -127,16 +129,33 @@ function parseDateParam(value: string | null): Date | undefined {
   return toDateColumn(date) === value ? date : undefined;
 }
 
+/**
+ * The `?at=HH:mm` the day timeline schedules with, checked the same way and for
+ * the same reason: a query parameter is user-editable, and a broken link should
+ * still open a usable form rather than report an error.
+ *
+ * The hour range is checked rather than just the shape, because `<input
+ * type="time">` silently shows nothing for a value like `99:99` — the field
+ * would read as empty while the URL insisted otherwise, which is a worse
+ * outcome than falling back to the blank default.
+ */
+function parseTimeParam(value: string | null): string | undefined {
+  if (value === null || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return undefined;
+  return value;
+}
+
 function AppointmentFormView({
   patientId,
   patientName,
   appointment,
   initialDate,
+  initialTime,
 }: {
   patientId: string;
   patientName: string;
   appointment: Appointment | undefined;
   initialDate: Date | undefined;
+  initialTime: string | undefined;
 }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -153,7 +172,7 @@ function AppointmentFormView({
     formState: { errors, isDirty },
   } = useForm<AppointmentForm>({
     resolver: zodResolver(schema),
-    defaultValues: toFormValues(appointment, initialDate),
+    defaultValues: toFormValues(appointment, initialDate, initialTime),
   });
 
   // Subscribing to `isDirty` costs one extra render of the form, and only one:
@@ -427,6 +446,7 @@ const isFutureDay = (date: Date): boolean => dateOnly(date) > dateOnly(new Date(
 function toFormValues(
   appointment: Appointment | undefined,
   initialDate: Date | undefined,
+  initialTime: string | undefined,
 ): AppointmentForm {
   if (appointment === undefined) {
     const scheduledFor = initialDate ?? new Date();
@@ -435,11 +455,13 @@ function toFormValues(
       // recorded in nearly every case. Arriving from the agenda overrides that
       // with the day the user was looking at.
       scheduledDate: toDateColumn(scheduledFor),
-      // Deliberately blank rather than a guess like "09:00". A pre-filled time
-      // is one the user can accept without reading, and a wrong time recorded
-      // confidently is worse than an empty field the form refuses to submit.
-      // The agenda supplies the day; only the clock is still missing.
-      scheduledTime: '',
+      // Blank unless a time was *chosen*. A guessed default like "09:00" is one
+      // the user can accept without reading, and a wrong time recorded
+      // confidently is worse than an empty field the form refuses to submit —
+      // so the month calendar, which supplies only a day, still leaves this
+      // empty. Clicking 10:00 on the day timeline is a different act: it is the
+      // user naming the time, not the form inventing one.
+      scheduledTime: initialTime ?? '',
       type: 'visit',
       location: 'other',
       // "Realizada" is right for the usual case — recording a visit that has

@@ -21,15 +21,22 @@ export const routes = {
   patient: (patientId: string) => `/patients/${patientId}`,
   editPatient: (patientId: string) => `/patients/${patientId}/edit`,
   /**
-   * `on` pre-fills the form's date. It is a query parameter rather than a path
-   * segment because it is optional and not part of the resource's identity: the
-   * page addressed is "a new appointment for this patient" either way, and a
-   * stripped or malformed `?on=` still lands somewhere sensible.
+   * `on` pre-fills the form's date and `at` its time. They are query parameters
+   * rather than path segments because they are optional and not part of the
+   * resource's identity: the page addressed is "a new appointment for this
+   * patient" either way, and a stripped or malformed `?on=` still lands
+   * somewhere sensible.
+   *
+   * `at` only ever comes from clicking an empty slot on the day timeline, which
+   * is why the form is willing to pre-fill a time it otherwise refuses to
+   * guess: clicking 10:00 on the axis *is* the user saying 10:00.
    */
-  newAppointment: (patientId: string, on?: Date) =>
-    on === undefined
-      ? `/patients/${patientId}/appointments/new`
-      : `/patients/${patientId}/appointments/new?on=${toDateColumn(on)}`,
+  newAppointment: (patientId: string, on?: Date, at?: string) => {
+    const base = `/patients/${patientId}/appointments/new`;
+    if (on === undefined) return base;
+    const date = `${base}?on=${toDateColumn(on)}`;
+    return at === undefined ? date : `${date}&at=${at}`;
+  },
   editAppointment: (patientId: string, appointmentId: string) =>
     `/patients/${patientId}/appointments/${appointmentId}/edit`,
   secretaries: '/secretaries',
