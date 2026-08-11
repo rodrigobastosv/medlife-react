@@ -23,6 +23,8 @@ export interface StubTables {
   appointments?: Record<string, unknown>[];
   notification_preferences?: Record<string, unknown>[];
   push_subscriptions?: Record<string, unknown>[];
+  availability_rules?: Record<string, unknown>[];
+  availability_exceptions?: Record<string, unknown>[];
 }
 
 export interface SupabaseStub {
