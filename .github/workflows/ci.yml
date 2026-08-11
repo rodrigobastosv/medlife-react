@@ -43,6 +43,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # A função do WhatsApp roda em Deno e duplica regras do domínio, porque
+      # não consegue importar `src/`. Estas checagens são o que impede as cópias
+      # de divergirem em silêncio — e o `tsc -b` acima não as alcança, já que o
+      # tsconfig inclui só `src`. Sem estar no CI, viram scripts que ninguém roda.
+      - name: Paridade das regras duplicadas e webhook
+        run: npm run check:parity
+
   e2e:
     name: Testes E2E
     runs-on: ubuntu-latest
