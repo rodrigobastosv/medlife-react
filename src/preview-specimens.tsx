@@ -11,6 +11,9 @@
  * `index.html` como entrada, então nada disto entra no bundle de produção.
  */
 import { formatCurrency } from '@/core/format';
+import type { AgendaEvent } from '@/domain/agenda/agenda-event';
+import type { AvailabilityRule } from '@/domain/agenda/availability';
+import { buildDayTimeline } from '@/domain/agenda/day-timeline';
 import type { Appointment } from '@/domain/appointments/appointment';
 import {
   APPOINTMENT_LOCATIONS,
@@ -21,6 +24,7 @@ import {
   appointmentTypeLabel,
 } from '@/domain/appointments/appointment-enums';
 import type { Patient } from '@/domain/patients/patient';
+import { DayTimelineView } from '@/features/agenda/day-timeline-view';
 import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { BirthdaysCard } from '@/features/patients/birthdays-card';
 import { Button } from '@/design-system/components/button';
@@ -261,6 +265,8 @@ export function Specimens() {
 
       <BirthdaysCard patients={PATIENTS} today={BIRTHDAY_MONTH} />
 
+      <DayTimelineSpecimen />
+
       <MoneyColumn />
 
       <FormFields />
@@ -290,6 +296,124 @@ export function Specimens() {
     </div>
   );
 }
+
+/**
+ * A linha do tempo do dia, com uma manhã cheia — que é o único jeito de julgá-la.
+ *
+ * Um dia vazio não diz nada sobre o componente: o que precisa ser olhado nos dois
+ * temas é o bloco colorido sobre a grade, a legibilidade do rótulo dentro de um
+ * bloco de meia hora, e o encaixe às 09:00, onde duas consultas dividem a largura.
+ * O vão entre o fim da clínica (12:00) e o começo do domiciliar (14:00) é o buraco
+ * de duas horas que a issue #31 diz ser a maior coisa da tela — e é, o que é o
+ * argumento inteiro a favor de um eixo em vez de uma lista.
+ *
+ * Roda a função de domínio de verdade, não um layout pré-calculado: uma mudança em
+ * `buildDayTimeline` aparece aqui sem ninguém lembrar de replicar.
+ */
+function DayTimelineSpecimen() {
+  const timeline = buildDayTimeline({
+    day: TIMELINE_DAY,
+    events: TIMELINE_EVENTS,
+    rules: TIMELINE_RULES,
+    exceptions: [],
+  });
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-display text-lg font-semibold">Linha do tempo do dia</h2>
+      <Card>
+        <DayTimelineView timeline={timeline} onPickSlot={() => undefined} />
+      </Card>
+    </section>
+  );
+}
+
+/** Terça-feira — `weekday: 2` nas regras abaixo. */
+const TIMELINE_DAY = new Date(2026, 6, 14);
+
+const TIMELINE_RULES: readonly AvailabilityRule[] = [
+  {
+    id: 'r1',
+    location: 'oncovie',
+    weekday: 2,
+    startTime: '08:00',
+    endTime: '12:00',
+    slotDurationMinutes: 30,
+  },
+  // Domiciliar em blocos de 90 minutos: a consulta inclui o deslocamento, e é o
+  // que faz um bloco da tarde ter o triplo da altura de um da manhã.
+  {
+    id: 'r2',
+    location: 'home',
+    weekday: 2,
+    startTime: '14:00',
+    endTime: '18:00',
+    slotDurationMinutes: 90,
+  },
+];
+
+const timelineAppointment = (
+  id: string,
+  patientName: string,
+  over: Partial<Appointment>,
+): Appointment => ({
+  id,
+  patientId: `p-${id}`,
+  scheduledDate: TIMELINE_DAY,
+  scheduledTime: '08:00',
+  type: 'visit',
+  location: 'oncovie',
+  status: 'scheduled',
+  finance: null,
+  patientName,
+  patientPhone: null,
+  nextReturnDate: null,
+  recallDate: null,
+  followUpDate: null,
+  followUpTime: null,
+  notes: null,
+  createdAt: TIMELINE_DAY,
+  createdBy: null,
+  ...over,
+});
+
+const TIMELINE_EVENTS: readonly AgendaEvent[] = [
+  {
+    date: TIMELINE_DAY,
+    type: 'consultation',
+    appointment: timelineAppointment('t1', 'Marina Albuquerque', { scheduledTime: '08:00' }),
+  },
+  {
+    date: TIMELINE_DAY,
+    type: 'consultation',
+    appointment: timelineAppointment('t2', 'Rubens Carvalho', { scheduledTime: '08:30' }),
+  },
+  // O encaixe: duas às 09:00. O formulário avisa e deixa salvar, então o eixo
+  // precisa saber desenhar as duas lado a lado em vez de uma por cima da outra.
+  {
+    date: TIMELINE_DAY,
+    type: 'consultation',
+    appointment: timelineAppointment('t3', 'Heloísa Nunes', { scheduledTime: '09:00' }),
+  },
+  {
+    date: TIMELINE_DAY,
+    type: 'consultation',
+    appointment: timelineAppointment('t4', 'Otávio Mendes', { scheduledTime: '09:00' }),
+  },
+  {
+    date: TIMELINE_DAY,
+    type: 'consultation',
+    appointment: timelineAppointment('t5', 'Beatriz Camargo', {
+      scheduledTime: '14:00',
+      location: 'home',
+    }),
+  },
+  {
+    date: TIMELINE_DAY,
+    type: 'followUp',
+    appointment: timelineAppointment('t6', 'Clarice Tavares', { followUpTime: '16:30' }),
+  },
+];
 
 /**
  * Os dois estados do switch, lado a lado.

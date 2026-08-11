@@ -59,7 +59,7 @@ const APPOINTMENT = {
 };
 
 /**
- * The rows of the selected day, and nothing else.
+ * The rows of the strip above the axis — everything on the day with no time.
  *
  * Named rather than reached for by position, and for two reasons that both bite.
  * The legend under the calendar prints every event type on every visit, so an
@@ -67,8 +67,8 @@ const APPOINTMENT = {
  * does not work at all; and the patient picker keeps a second list of names in
  * the DOM while it is closed, so "the list items in main" is not the day either.
  */
-const dayRows = (page: Page) =>
-  page.getByRole('list', { name: 'Eventos do dia' }).getByRole('listitem');
+const untimedRows = (page: Page) =>
+  page.getByRole('list', { name: 'Sem horário definido' }).getByRole('listitem');
 
 /**
  * The label above each row — "Consulta", "Acompanhamento", "Aniversário".
@@ -79,8 +79,12 @@ const dayRows = (page: Page) =>
  * acompanhamento prints "Acompanhamento em 02/08/2026" as a tag of its own. Only
  * the position says which of them is the reason this row is on this day.
  */
-const dayTags = (page: Page) =>
-  page.getByRole('list', { name: 'Eventos do dia' }).locator('li > span');
+const untimedTags = (page: Page) =>
+  page.getByRole('list', { name: 'Sem horário definido' }).locator('li > span');
+
+/** The blocks drawn on the day's time axis. */
+const timelineBlocks = (page: Page) =>
+  page.getByRole('list', { name: 'Consultas do dia' }).getByRole('listitem');
 
 test('one appointment lands on the day twice when it carries an acompanhamento', async ({
   page,
@@ -92,11 +96,31 @@ test('one appointment lands on the day twice when it carries an acompanhamento',
   await supabase.signIn();
   await page.goto('/agenda');
 
-  // Two rows for one appointment: the same row is on the day for two different
-  // reasons, which is the fan-out the calendar exists to show. The scheduled
-  // hour comes first — the acompanhamento is a task, not a time slot.
-  await expect(dayTags(page)).toHaveText(['Consulta', 'Acompanhamento']);
-  await expect(dayRows(page)).toHaveCount(2);
+  // Two blocks for one appointment: the same row is on the day for two
+  // different reasons, which is the fan-out the calendar exists to show. Both
+  // land on the axis because both carry an hour — the consultation at 14:00 and
+  // the acompanhamento the doctor set for 16:30.
+  await expect(timelineBlocks(page)).toHaveCount(2);
+  await expect(timelineBlocks(page).nth(0)).toContainText('14:00');
+  await expect(timelineBlocks(page).nth(1)).toContainText('16:30');
+  await expect(untimedRows(page)).toHaveCount(0);
+});
+
+test('an acompanhamento with no hour is a task, not a slot at midnight', async ({
+  page,
+  supabase,
+}) => {
+  supabase.tables.patients = [{ ...PATIENT, birth_date: null }];
+  supabase.tables.appointments = [{ ...APPOINTMENT, follow_up_time: null }];
+
+  await supabase.signIn();
+  await page.goto('/agenda');
+
+  // The consultation keeps its 14:00 on the axis; the acompanhamento has only a
+  // day, so it belongs in the strip above it. Drawing it at the top of a clock
+  // would claim somebody scheduled it for midnight.
+  await expect(timelineBlocks(page)).toHaveCount(1);
+  await expect(untimedTags(page)).toHaveText(['Acompanhamento']);
 });
 
 test('a birthday appears on a day with nothing scheduled', async ({ page, supabase }) => {
@@ -106,16 +130,16 @@ test('a birthday appears on a day with nothing scheduled', async ({ page, supaba
   await supabase.signIn();
   await page.goto('/agenda');
 
-  await expect(dayTags(page)).toHaveText(['Aniversário']);
+  await expect(untimedTags(page)).toHaveText(['Aniversário']);
 
-  const birthday = dayRows(page).first();
+  const birthday = untimedRows(page).first();
   await expect(birthday.getByText('Ana Souza')).toBeVisible();
   // Not "hoje": the calendar can be showing any day, and the age is the only
   // part of the sentence that is true on all of them.
   await expect(birthday.getByText(/Faz \d+ anos/)).toBeVisible();
-  // The empty state must not win the race — the register is part of the answer
-  // to "is this day empty", so the list waits for it.
-  await expect(page.getByText('Nada neste dia')).toHaveCount(0);
+  // A birthday is a fact about a date and never reaches the axis, however empty
+  // the day is.
+  await expect(timelineBlocks(page)).toHaveCount(0);
 });
 
 test('a patient with no birth date is not treated as born on the 1st', async ({
@@ -128,8 +152,12 @@ test('a patient with no birth date is not treated as born on the 1st', async ({
   await supabase.signIn();
   await page.goto('/agenda');
 
-  await expect(page.getByText('Nada neste dia')).toBeVisible();
-  await expect(dayRows(page)).toHaveCount(0);
+  // An empty day is not an empty screen any more — it is an axis with nothing
+  // on it, which is the point: a day with no bookings is exactly the day whose
+  // gaps you came to look at. What must not appear is a phantom birthday.
+  await expect(untimedRows(page)).toHaveCount(0);
+  await expect(timelineBlocks(page)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Marcar consulta às 09:00' })).toBeVisible();
 });
 
 test('the legend explains every colour the calendar can show', async ({ page, supabase }) => {

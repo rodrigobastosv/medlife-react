@@ -53,7 +53,14 @@
   --ml-outline: #d3d6d6;
 
   /* Status */
+  /* Success gained its container/ink pair the same way violet did below, and
+     for the same reason: it was a bare accent while it was only ever a dot on
+     the calendar, and a dot carries no text. The day timeline draws an
+     acompanhamento as a labelled block in this hue, and the accent-on-surface
+     pairing does not hold a 12px label at 4.5:1. */
   --ml-success: #2f8f7a;
+  --ml-success-container: #cceae2;
+  --ml-on-success-container: #062b23;
   --ml-warning: #e8a317;
   --ml-warning-container: #fbecc7;
   --ml-on-warning-container: #3d2e00;
@@ -98,6 +105,8 @@
   --ml-outline: #3d4748;
 
   --ml-success: #2f8f7a;
+  --ml-success-container: #12483d;
+  --ml-on-success-container: #cceae2;
   --ml-warning: #e8a317;
   --ml-warning-container: #6b4e00;
   --ml-on-warning-container: #fbecc7;
@@ -131,6 +140,8 @@
   --color-outline: var(--ml-outline);
 
   --color-success: var(--ml-success);
+  --color-success-container: var(--ml-success-container);
+  --color-on-success-container: var(--ml-on-success-container);
   --color-warning: var(--ml-warning);
   --color-warning-container: var(--ml-warning-container);
   --color-on-warning-container: var(--ml-on-warning-container);
