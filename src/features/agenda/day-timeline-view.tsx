@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { routes } from '@/app/routing/routes';
 import { agendaEventTypeLabel, type AgendaEventType } from '@/domain/agenda/agenda-event';
 import { minutesToLabel, type DayTimeline } from '@/domain/agenda/day-timeline';
+import { appointmentLocationLabel } from '@/domain/appointments/appointment-enums';
 import { cn } from '@/design-system/cn';
 
 /**
@@ -15,9 +16,10 @@ import { cn } from '@/design-system/cn';
  * gaps. On an axis a two-hour hole is the biggest thing on screen; in a list it
  * is not on screen at all.
  *
- * Only the axis is rendered here. Everything without a time of day stays with
- * the page, which already draws those as full rows with a contact bar — a strip
- * of them belongs *above* the axis, not squeezed into it.
+ * Only the axis is rendered here. Everything without a time of day is the
+ * page's business, and it puts those in a card of their own beside the month
+ * rather than on the clock — a task with no hour is not an appointment at
+ * midnight.
  *
  * No calendar dependency, in keeping with the rest of the design system: this
  * is a column, a row per hour, and blocks positioned by `top`/`height` from
@@ -25,11 +27,27 @@ import { cn } from '@/design-system/cn';
  */
 
 /**
- * Vertical scale. At 1.2 an hour is 72px, which is tall enough for a
- * half-hour block to hold a name and short enough that a ten-hour day fits on a
- * laptop screen without scrolling.
+ * Vertical scale: one pixel per minute, so an hour is 60px and a ten-hour day
+ * is 600px.
+ *
+ * Was 1.2, which made that same day 720px — and an empty hour costs exactly as
+ * much of it as a full one, so the emptier the day the more it demanded to be
+ * scrolled. That is backwards: an empty day is the one that should be taken in
+ * at a glance. One-to-one also removes the arithmetic from every position in
+ * this file — a block at 09:30 on an axis starting at 08:00 is 90px down, and
+ * that is the whole calculation.
  */
-const MINUTE_PX = 1.2;
+const MINUTE_PX = 1;
+
+/**
+ * Below this a block gets one line; above it, room for the location as well.
+ *
+ * The threshold is in minutes rather than pixels because it is a fact about the
+ * appointment, not about the scale: a 30-minute consultation has one line's
+ * worth of things worth saying, and a 90-minute home visit has a large empty
+ * rectangle that may as well say where it is.
+ */
+const TWO_LINE_MINUTES = 45;
 
 /**
  * Nothing shorter than this is drawn, however short the appointment.
@@ -145,21 +163,28 @@ export function DayTimelineView({
                   <Link
                     to={routes.editAppointment(appointment.patientId, appointment.id)}
                     className={cn(
-                      'flex size-full overflow-hidden rounded-s border-l-4 px-2 py-1 text-xs',
+                      'flex size-full flex-col overflow-hidden rounded-s border-l-4 px-2 py-1 text-xs',
                       'hover:brightness-105',
                       blockClasses[block.event.type],
                     )}
                   >
-                    {/* The type is named for a screen reader but not drawn: the
-                        block's colour already says it to a sighted reader, and
-                        a "Consulta" prefix on every block would push the name —
-                        the thing actually being looked for — out of a
-                        half-hour box. */}
-                    <span className="sr-only">{agendaEventTypeLabel[block.event.type]}</span>
-                    <span className="nums font-medium">{minutesToLabel(block.startMinutes)}</span>
-                    <span className="truncate">
-                      &nbsp;{appointment.patientName ?? agendaEventTypeLabel[block.event.type]}
+                    <span className="flex">
+                      {/* The type is named for a screen reader but not drawn:
+                          the block's colour already says it to a sighted
+                          reader, and a "Consulta" prefix on every block would
+                          push the name — the thing actually being looked for —
+                          out of a half-hour box. */}
+                      <span className="sr-only">{agendaEventTypeLabel[block.event.type]}</span>
+                      <span className="nums font-medium">{minutesToLabel(block.startMinutes)}</span>
+                      <span className="truncate">
+                        &nbsp;{appointment.patientName ?? agendaEventTypeLabel[block.event.type]}
+                      </span>
                     </span>
+                    {block.endMinutes - block.startMinutes >= TWO_LINE_MINUTES && (
+                      <span className="truncate opacity-75">
+                        {appointmentLocationLabel[appointment.location]}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

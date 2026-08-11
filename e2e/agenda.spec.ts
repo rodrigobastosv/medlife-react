@@ -74,10 +74,15 @@ const untimedRows = (page: Page) =>
  * The label above each row — "Consulta", "Acompanhamento", "Aniversário".
  *
  * Read from the tag element rather than by filtering rows on their text, because
- * the tile inside a row repeats those words for other reasons: an appointment
- * whose type is a consultation says "Consulta" in its body, and one carrying an
- * acompanhamento prints "Acompanhamento em 02/08/2026" as a tag of its own. Only
- * the position says which of them is the reason this row is on this day.
+ * a row repeats those words for other reasons: an appointment whose type is a
+ * consultation says "Consulta" in its body, and one carrying an acompanhamento
+ * says so in its own line of context. Only the position says which of them is
+ * the reason this row is on this day.
+ *
+ * The position it relies on is that the tag is the row's only direct `span`
+ * child — the name is a link and the context line is a `<p>`. Adding a bare
+ * `<span>` to `UntimedRow` breaks this, and the symptom is this assertion
+ * seeing two labels where the screen shows one.
  */
 const untimedTags = (page: Page) =>
   page.getByRole('list', { name: 'Sem horário definido' }).locator('li > span');
@@ -121,6 +126,42 @@ test('an acompanhamento with no hour is a task, not a slot at midnight', async (
   // would claim somebody scheduled it for midnight.
   await expect(timelineBlocks(page)).toHaveCount(1);
   await expect(untimedTags(page)).toHaveText(['Acompanhamento']);
+});
+
+test('the axis comes before the strip in the reading order', async ({ page, supabase }) => {
+  supabase.tables.patients = [{ ...PATIENT, birth_date: null }];
+  supabase.tables.appointments = [{ ...APPOINTMENT, follow_up_time: null }];
+
+  await supabase.signIn();
+  await page.goto('/agenda');
+
+  // Both have to be on the page before their order can mean anything —
+  // `evaluate` runs the moment it is called, and an unmounted React tree would
+  // report "missing" rather than a wrong order, which is a passing-looking
+  // failure waiting to happen.
+  await expect(timelineBlocks(page)).toHaveCount(1);
+  await expect(untimedRows(page)).toHaveCount(1);
+
+  // Source order, not pixels, because the two are laid out differently at each
+  // width: on a wide screen the grid moves the strip into the column under the
+  // month, and on a phone there is one column and the source order *is* the
+  // reading order. That phone case is what this protects. The strip used to
+  // come first, and four full rows of it stood between the month and the day's
+  // clock — the axis began below the fold on the screen it was built for.
+  const order = await page.evaluate(() => {
+    const axis = document.querySelector('ul[aria-label="Consultas do dia"]');
+    const strip = document.querySelector('ul[aria-label="Sem horário definido"]');
+    if (axis === null || strip === null) return 'missing';
+    const following = axis.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING;
+    return following !== 0 ? 'axis-first' : 'strip-first';
+  });
+
+  expect(order).toBe('axis-first');
+
+  // And the rule the strip embodies is stated on screen, not only in its
+  // accessible name — a sighted reader met four rows and then a clock with
+  // nothing saying why those rows were not on it.
+  await expect(page.getByRole('heading', { name: 'Sem horário definido' })).toBeVisible();
 });
 
 test('a birthday appears on a day with nothing scheduled', async ({ page, supabase }) => {
