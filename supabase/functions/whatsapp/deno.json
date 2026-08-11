@@ -1,0 +1,16 @@
+{
+  "//": "Import map da função. Versões pinadas, pelo mesmo motivo da notify: a função é publicada uma vez e roda sem supervisão por meses, então 'o que for a última versão no dia do deploy' faria dois deploys do mesmo commit serem programas diferentes.",
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.111.0",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.116.0"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
