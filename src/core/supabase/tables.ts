@@ -15,6 +15,8 @@ export const Table = {
   secretaryInvites: 'secretary_invites',
   notificationPreferences: 'notification_preferences',
   pushSubscriptions: 'push_subscriptions',
+  availabilityRules: 'availability_rules',
+  availabilityExceptions: 'availability_exceptions',
 } as const;
 
 export type TableName = (typeof Table)[keyof typeof Table];

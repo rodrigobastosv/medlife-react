@@ -22,7 +22,8 @@ import { PageSpinner } from '@/design-system/components/spinner';
  *   RequireGuest    → sign-in, sign-up
  *   RequireAuth     → AppShell → Ajustes (sem guard: é por onde se sai)
  *                                RequireActiveDoctor → the working screens
- *                                RequireDoctor       → reports, secretaries
+ *                                RequireDoctor       → reports, secretaries,
+ *                                                      availability
  *
  * A screen added under the wrong parent is a visible mistake here, where a
  * missing `if` at the top of a page component is not.
@@ -207,6 +208,13 @@ export const router = createBrowserRouter([
                     lazy: () =>
                       import('@/features/secretaries/secretaries-page').then((m) => ({
                         Component: m.SecretariesPage,
+                      })),
+                  },
+                  {
+                    path: routes.availability,
+                    lazy: () =>
+                      import('@/features/availability/availability-page').then((m) => ({
+                        Component: m.AvailabilityPage,
                       })),
                   },
                 ],

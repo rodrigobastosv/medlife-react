@@ -1,15 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 import { useSession } from '@/app/providers/session-context';
 import { THEME_MODES, themeModeLabel, useTheme } from '@/app/providers/theme-context';
 import { useToast } from '@/app/providers/toast-context';
+import { routes } from '@/app/routing/routes';
 import { messageOf } from '@/core/errors';
 import { signOut } from '@/data/auth-repository';
 import { profileDisplayName } from '@/domain/profile/profile';
 import { Button } from '@/design-system/components/button';
 import { Card, CardTitle } from '@/design-system/components/card';
 import { cn } from '@/design-system/cn';
-import { LogoutIcon } from '@/design-system/components/icons';
+import { ChevronRightIcon, LogoutIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
 import { NotificationSettingsCard } from '@/features/notifications/notification-settings-card';
 
@@ -58,6 +60,22 @@ export function SettingsPage() {
               ))}
             </div>
           </Card>
+        )}
+
+        {/* Doctor-only, same as the route it links to: this is her own clinic
+            hours, not something a secretary manages on her behalf. */}
+        {role === 'doctor' && (
+          <Link to={routes.availability}>
+            <Card className="hover:bg-surface-container-high flex items-center justify-between gap-3 transition-colors">
+              <div>
+                <CardTitle>Horários de atendimento</CardTitle>
+                <p className="text-on-surface-variant mt-1 text-sm">
+                  Dias, horários e exceções — feriados e horários especiais.
+                </p>
+              </div>
+              <ChevronRightIcon className="text-on-surface-variant size-5 shrink-0" aria-hidden />
+            </Card>
+          </Link>
         )}
 
         <NotificationSettingsCard />
