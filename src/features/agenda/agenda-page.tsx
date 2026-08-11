@@ -13,11 +13,10 @@ import {
   AGENDA_EVENT_TYPES,
   type AgendaEvent,
   type AgendaEventType,
-  type BirthdayAgendaEvent,
+  type AppointmentAgendaEvent,
 } from '@/domain/agenda/agenda-event';
 import { buildDayTimeline } from '@/domain/agenda/day-timeline';
 import { DayTimelineView } from '@/features/agenda/day-timeline-view';
-import { AppointmentTile } from '@/features/appointments/appointment-tile';
 import { agendaRange, useAgendaQuery } from '@/features/appointments/use-appointments';
 import {
   useAvailabilityExceptionsQuery,
@@ -28,7 +27,7 @@ import { PatientPickerDialog } from '@/features/patients/patient-picker-dialog';
 import { usePatientsQuery } from '@/features/patients/use-patients';
 import { Button } from '@/design-system/components/button';
 import { Calendar } from '@/design-system/components/calendar';
-import { Card } from '@/design-system/components/card';
+import { Card, CardTitle } from '@/design-system/components/card';
 import { EmptyState } from '@/design-system/components/empty-state';
 import { CakeIcon, PlusIcon } from '@/design-system/components/icons';
 import { Page, PageHeader } from '@/design-system/components/page';
@@ -102,6 +101,19 @@ export function AgendaPage() {
     setIsPickingPatient(true);
   };
 
+  // The register is part of the answer to "what is on this day", so nothing can
+  // be said about the day before it arrives. The availability queries join the
+  // wait for a different reason: rendering the axis before they land would draw
+  // the fallback day and then jump to the declared hours, moving every block
+  // out from under the cursor.
+  //
+  // Hoisted because the axis and the strip are now in two places in the grid
+  // and have to agree about whether the day is known yet — two copies of this
+  // expression would eventually disagree, and the visible symptom would be a
+  // strip rendered against a day the axis is still loading.
+  const isLoading =
+    agenda.isPending || patients.isPending || rules.isPending || exceptions.isPending;
+
   return (
     <Page>
       <PageHeader
@@ -109,8 +121,19 @@ export function AgendaPage() {
         subtitle="Consultas, retornos, recalls, acompanhamentos e aniversários."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:items-start">
-        <Card>
+      {/* The DOM order is calendar → axis → strip, and the grid puts the strip
+          back under the calendar on a wide screen.
+
+          That split is the point rather than an accident of markup. On a phone
+          there is one column and the source order is the reading order, so the
+          axis has to come before the strip — putting four full rows between the
+          month and the day's clock is what made this page unreadable on a phone
+          in the first place. On a desktop the calendar column ran out about
+          1200px above the bottom of the page while the right column overflowed,
+          so the strip goes into that empty gutter instead of on top of the
+          thing it was burying. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:grid-rows-[auto_1fr] lg:items-start">
+        <Card className="lg:col-start-1 lg:row-start-1">
           <Calendar
             month={month}
             selectedDay={selectedDay}
@@ -151,7 +174,7 @@ export function AgendaPage() {
           </div>
         </Card>
 
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-semibold">{formatWeekday(selectedDay)}</h2>
             {/* Scheduling starts from the day you are looking at, which is the
@@ -162,15 +185,11 @@ export function AgendaPage() {
             </Button>
           </div>
 
-          {/* The register is part of the answer now, so "nada neste dia" cannot
-              be said before it has arrived. A *failure* to load it is different:
+          {/* A *failure* to load the register is different from waiting for it:
               the agenda still has everything that was scheduled, and losing the
               whole screen over a birthday list nobody came here for would be the
               worse trade. */}
-          {/* The availability queries join the wait. Rendering the axis before
-              they land would draw the fallback day and then jump to the
-              declared hours, moving every block under the cursor. */}
-          {agenda.isPending || patients.isPending || rules.isPending || exceptions.isPending ? (
+          {isLoading ? (
             <SkeletonList rows={2} />
           ) : agenda.isError ? (
             <EmptyState
@@ -181,41 +200,6 @@ export function AgendaPage() {
             />
           ) : (
             <>
-              {/* Above the axis, not on it. A recall, a return, a birthday and a
-                  legacy appointment with no `scheduled_time` have no time of
-                  day; dropping them at the top of a clock would draw them as
-                  appointments at midnight, which is a claim the data does not
-                  make. They keep the full rows — a birthday's useful next move
-                  is the contact bar, and that does not fit in a block. */}
-              {timeline.untimed.length > 0 && (
-                // Named, because it is not the only list on this screen — the
-                // patient picker holds another — and "lista" on its own tells a
-                // screen reader nothing about which one it has landed in.
-                <ul aria-label="Sem horário definido" className="flex flex-col gap-3">
-                  {timeline.untimed.map((event) => (
-                    <li
-                      key={agendaEventKey(event)}
-                      className={`flex flex-col gap-1.5 border-l-4 pl-3 ${railClasses[event.type]}`}
-                    >
-                      <Tag
-                        tone={tagTones[event.type]}
-                        icon={
-                          event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined
-                        }
-                        className="self-start"
-                      >
-                        {agendaEventTypeLabel[event.type]}
-                      </Tag>
-                      {event.type === 'birthday' ? (
-                        <BirthdayTile event={event} />
-                      ) : (
-                        <AppointmentTile appointment={event.appointment} showPatientName />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
               <p className="text-on-surface-variant text-sm">
                 Clique em um horário livre para marcar uma consulta nele.
               </p>
@@ -224,6 +208,27 @@ export function AgendaPage() {
             </>
           )}
         </section>
+
+        {/* Not on the axis, and now not on top of it either. A recall, a return,
+            a birthday and a legacy appointment with no `scheduled_time` have no
+            time of day; drawing them at the top of a clock would claim somebody
+            scheduled them for midnight. The card gives that rule a heading a
+            sighted reader can actually see — the list's accessible name said it
+            to screen readers only, so everyone else met four cards and then a
+            clock with nothing explaining why those four were not on it. */}
+        {!isLoading && !agenda.isError && timeline.untimed.length > 0 && (
+          <Card className="flex flex-col gap-3 lg:col-start-1 lg:row-start-2">
+            <CardTitle>Sem horário definido</CardTitle>
+            {/* Named, because it is not the only list on this screen — the
+                patient picker holds another — and "lista" on its own tells a
+                screen reader nothing about which one it has landed in. */}
+            <ul aria-label="Sem horário definido" className="flex flex-col gap-2">
+              {timeline.untimed.map((event) => (
+                <UntimedRow key={agendaEventKey(event)} event={event} />
+              ))}
+            </ul>
+          </Card>
+        )}
       </div>
 
       <PatientPickerDialog
@@ -248,34 +253,74 @@ export function AgendaPage() {
 }
 
 /**
- * A birthday as a row, shaped like `AppointmentTile` because it sits in the same
- * list — the same card, the same link to the record, the same contact bar.
+ * One row of the strip: why it is on this day, who it is about, and the two
+ * buttons that act on it.
  *
- * That bar is the point of putting birthdays here at all: the useful next move
- * is to call or message the patient, and it is the same two buttons the rows
- * around it offer. It renders nothing when the register has no phone number,
- * exactly as it does for an appointment.
+ * Deliberately lighter than `AppointmentTile`, which is what this used to
+ * render. That tile is the heaviest row in the app — a bordered card, a status
+ * tag, a date/type/location line and a contact bar — and four of them stacked
+ * up to about 870px, burying the axis under the least scheduled part of the
+ * day. The tile earns that weight on a patient's record, where the appointment
+ * is the subject; here the subject is the day, and each row only has to answer
+ * "what is this and who do I call".
+ *
+ * The contact bar stays, because it is the whole reason a birthday and a recall
+ * are on this screen at all: the useful next move is to phone the patient. It
+ * renders nothing when the register has no number.
  */
-function BirthdayTile({ event }: { event: BirthdayAgendaEvent }) {
-  const { patient, turningAge } = event;
+function UntimedRow({ event }: { event: AgendaEvent }) {
+  const subject =
+    event.type === 'birthday'
+      ? {
+          id: event.patient.id,
+          name: event.patient.fullName,
+          phone: event.patient.phone,
+          detail: ageLine(event.turningAge),
+        }
+      : {
+          id: event.appointment.patientId,
+          name: event.appointment.patientName ?? 'Paciente',
+          phone: event.appointment.patientPhone,
+          detail: appointmentDetail(event),
+        };
 
   return (
-    <div className="bg-surface-container-low border-outline/70 flex flex-col overflow-hidden rounded-l border">
-      <Link
-        to={routes.patient(patient.id)}
-        className="hover:bg-surface-container-high flex flex-col gap-1 p-4 transition-colors"
+    <li
+      className={`rounded-m bg-surface-container-low flex flex-col gap-1.5 border-l-4 p-3 ${railClasses[event.type]}`}
+    >
+      <Tag
+        tone={tagTones[event.type]}
+        icon={event.type === 'birthday' ? <CakeIcon className="size-3.5" /> : undefined}
+        className="self-start"
       >
-        <span className="font-semibold">{patient.fullName}</span>
-        <span className="text-on-surface-variant text-sm">{ageLine(turningAge)}</span>
+        {agendaEventTypeLabel[event.type]}
+      </Tag>
+      <Link to={routes.patient(subject.id)} className="text-sm font-semibold hover:underline">
+        {subject.name}
       </Link>
-
-      <PatientContactActions
-        phone={patient.phone}
-        patientName={patient.fullName}
-        className="border-outline/70 border-t px-4 py-2"
-      />
-    </div>
+      {/* A `<p>`, not a `<span>`: it is a line of prose rather than an inline
+          run, and keeping it out of the row's direct `span` children leaves the
+          tag as the only one — which is how a reader, and `e2e/agenda.spec.ts`,
+          tell "why is this row here" apart from everything else on it. */}
+      <p className="text-on-surface-variant text-xs">{subject.detail}</p>
+      <PatientContactActions phone={subject.phone} patientName={subject.name} className="pt-1" />
+    </li>
   );
+}
+
+/**
+ * The one line of context an untimed appointment row gets.
+ *
+ * For a return, a recall or an acompanhamento the useful fact is which
+ * consultation left this task behind — the tag already said which kind of task
+ * it is. A `consultation` event only reaches this strip when its
+ * `scheduled_time` is null, which means the row predates the column rather than
+ * being allowed to have no hour, and saying so is more honest than printing its
+ * date back to a reader who is looking at that very day.
+ */
+function appointmentDetail(event: AppointmentAgendaEvent): string {
+  if (event.type === 'consultation') return 'Sem horário registrado';
+  return `Da consulta de ${formatDate(event.appointment.scheduledDate)}`;
 }
 
 /**
